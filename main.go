@@ -24,6 +24,12 @@ const usage = `herdr-github — GitHub pull requests in herdr
                    fictional org: no account, no network, safe to screenshot
   tick [--force]   refresh the sidebar labels ($pr, $pr_badge, …); herdr runs
                    this on its events. --force asks GitHub again right away
+  prs [--force] JSON
+                   the pull request of each branch in JSON, a list of
+                   {"remote", "branch", "head", "owner"}, as a JSON list on
+                   stdout, in the same order. An answer younger than
+                   label_refresh_seconds (a minute) is reused; --force asks
+                   GitHub again right away
   status           which GitHub hosts gh is signed in to, as the plugin sees it
   handoff JSON     (internal) open the popup this one was opened from, once
                    this one has closed
@@ -83,6 +89,8 @@ func run(ctx context.Context, args []string) error {
 			return errors.New("handoff needs a popup")
 		}
 		return runHandoff(args[1])
+	case "prs":
+		return runPRs(ctx, cfg, args[1:], os.Stdout)
 	case "status":
 		return status(ctx, cfg)
 	case "kickoff":

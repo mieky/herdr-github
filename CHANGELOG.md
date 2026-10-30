@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **A branch's pull request, for programs that can't see the labels.**
+  `herdr-github prs '[{"remote": …, "branch": …, "head": …, "owner": …}]'`
+  prints, as JSON in the same order, the PR each branch has: its number,
+  link, state, checks, review and badge (`#482 ✓ approved`), the same PR
+  its label would show. A branch is named by its repo's remote URL, not a
+  checkout, so the machine where gh is signed in can answer for agents on
+  any machine; it's what the Herdr app's Recap uses. An answer under a
+  minute old is reused, so asking every few seconds is fine, and
+  `--force` asks GitHub again. A branch that can't be looked up says why
+  in its own entry; the others are answered as usual.
+
 ## 0.8.5 - 2026-10-20
 
 - **herdr-vitals joins the plugins that work together.** The README's
