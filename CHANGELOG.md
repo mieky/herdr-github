@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.3 - 2026-11-01
+
+- **Background jobs keep a log** and record their process (a worktree's
+  fetch, a clone), so in the app one that stops without an answer is
+  reported at once, with why, instead of waiting out its time.
+
 ## 0.10.2 - 2026-11-01
 
 - **A pull request's Linear issue, a link.** In the app, a PR whose branch,
