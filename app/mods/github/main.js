@@ -10,7 +10,7 @@
 
 import { View, div } from "gpui-kit";
 import * as fs from "fs/promises";
-import { v_flex, h_flex, InputState, Input, TextView } from "gpui-base";
+import { v_flex, h_flex, InputState, Input, TextView, Scrollbar, v_virtual_list, VirtualListScrollHandle } from "gpui-base";
 import { agents, panes, machines, spaces, run, exec, theme, appHome, props, closeOverlay, openOverlay, nextCommand, knownAgents } from "herdr";
 import { demoAgents, DEMO_REPO } from "./demo.js";
 import { tones, tint, countPill, groupOf, toneColor, prLook, checkLook, ago, icon, chip, words, key, MONO } from "./look.js";
@@ -121,6 +121,13 @@ function ticketKey(...texts) {
 const MAGIC = /\b(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?|part of|refs?)\s+([A-Za-z][A-Za-z0-9]{1,9}-[1-9][0-9]{0,5})\b/i;
 const issueOf = (pr, body) => ticketKey(pr?.head, pr?.title) ?? (MAGIC.exec(body ?? "")?.[1]?.toUpperCase() || null);
 
+// The list's heights: a heading's, a pull request's card (and a gap), a
+// repo's row, and the most it takes before it scrolls.
+const HEADING_H = 30;
+const CARD_H = 74;
+const REPO_H = 36;
+const LIST_H = 560;
+
 // Where the lists are kept between openings.
 const CACHE = `${appHome()}/github-cache.json`;
 
@@ -174,6 +181,8 @@ export default class GitHub extends View {
     });
 
     this.keys = cx.focus_handle();
+    // The list's scroll position, so the chosen row is kept in sight.
+    this.scroll = VirtualListScrollHandle.new();
     this.input = InputState.new({ placeholder: "Type to filter…  ← → to change tabs" });
     this.input.on("change", (_e, cx) => {
       this.filter = this.input.value();
@@ -859,8 +868,10 @@ export default class GitHub extends View {
 
   listKey(k, cx) {
     const n = this.pickingRepo() ? this.shownRepos().length : this.shown?.length ?? 0;
-    if (k === "down" && n) this.at = (this.at + 1) % n;
-    else if (k === "up" && n) this.at = (this.at + n - 1) % n;
+    if (k === "down" && n) (this.at = Math.min(n - 1, this.at + 1)), this.follow();
+    else if (k === "up" && n) (this.at = Math.max(0, this.at - 1)), this.follow();
+    else if (k === "pagedown" && n) (this.at = Math.min(n - 1, this.at + 6)), this.follow();
+    else if (k === "pageup" && n) (this.at = Math.max(0, this.at - 6)), this.follow();
     else if (k === "right" && !this.filter) this.step(1, cx);
     else if (k === "left" && !this.filter) this.step(-1, cx);
     else return false;
@@ -906,11 +917,7 @@ export default class GitHub extends View {
       .when(on, (el) => el.bg(o.raised).shadow_md())
       .when(!on, (el) => el.hover((el) => el.bg(o.raised)))
       .cursor_pointer()
-      .on_click((_e, cx) => {
-        if (on) return this.openPR(pr, cx);
-        this.at = i;
-        cx.notify();
-      })
+      .h(CARD_H - 2)
       // The chosen one's mark, in its group's colour.
       .child(v_flex().w(3).ml(12).flex_none().pt(12).pb(12).child(div().flex_1().min_h(16).rounded(2).when(on, (el) => el.bg(o[g.tone]))))
       .child(
@@ -925,7 +932,9 @@ export default class GitHub extends View {
                   .child(div().flex_1())
                   .child(div().flex_none().text_size(12).text_color(o.dim).child(`${pr.repo.split("/")[1]} · ${pr.author} · ${ago(pr.updated)}`)),
               )
-              .child(h_flex().gap(6).flex_wrap().items_center().children(chips)),
+              // One line of chips, so every card is as tall: the list keeps
+              // the chosen one in sight by their heights.
+              .child(h_flex().gap(6).items_center().overflow_hidden().children(chips)),
           ),
       );
   }
@@ -936,8 +945,8 @@ export default class GitHub extends View {
     return short ? tb.short ?? tb.label : tb.label;
   }
 
-  heading(o, g, n, first) {
-    return h_flex().flex_none().px(10).pt(first ? 4 : 12).pb(4).gap(8).items_center().text_size(10.5)
+  heading(o, g, n) {
+    return h_flex().flex_none().h(HEADING_H).px(10).pt(8).gap(8).items_center().text_size(10.5)
       .child(div().font_semibold().text_color(o[g.tone]).child(g.label.toUpperCase()))
       .child(div().font_medium().text_color(o.dim).child(String(n)))
       .child(div().flex_1().h(1).bg(o.line));
@@ -980,44 +989,81 @@ export default class GitHub extends View {
     return div().px(14).py(10).text_size(12.8).text_color(color ?? o.dim).child(text);
   }
 
+  // The list: notes about it (an error, empty, loading), and its entries,
+  // headings and rows (pull requests, or repos to pick), each of a fixed
+  // height, for the virtual list that keeps the chosen row in sight.
   listBody(o) {
-    const items = [];
+    const notes = [];
+    const entries = [];
+    const after = [];
+    this.entryOf = [];
     if (this.pickingRepo()) {
       const rs = this.shownRepos();
       this.at = Math.max(0, Math.min(this.at, rs.length - 1));
-      if (!this.repos) items.push(this.note(o, "The shown space isn't in a GitHub repo. Change repo to pick one."));
-      else if (this.repos.loading) items.push(this.note(o, "Loading your repos…"));
-      else if (this.repos.error) items.push(this.note(o, this.repos.error, o.fix));
+      if (!this.repos) notes.push(this.note(o, "The shown space isn't in a GitHub repo. Change repo to pick one."));
+      else if (this.repos.loading) notes.push(this.note(o, "Loading your repos…"));
+      else if (this.repos.error) notes.push(this.note(o, this.repos.error, o.fix));
       rs.forEach((r, i) => {
         const on = i === this.at;
-        items.push(h_flex().id(`repo-${r.repo}`).flex_none().h(34).px(14).gap(10).items_center().rounded(8).cursor_pointer()
-          .when(on, (el) => el.bg(o.raised))
-          .when(!on, (el) => el.hover((s) => s.bg(o.raised)))
-          .on_click((_e, cx) => this.pickRepo(r, cx))
-          .child(icon("pr", o.dim, 14))
-          .child(div().flex_1().truncate().font_family(MONO).text_size(12.5).text_color(o.fg).child(r.repo))
-          .child(div().flex_none().text_size(11.5).text_color(o.dim).child(`pushed ${ago(r.pushed)}`)));
+        this.entryOf[i] = entries.length;
+        entries.push({ key: `repo-${r.repo}`, row: i, h: REPO_H, el: () => div().h(REPO_H).pb(2).child(
+          h_flex().h(REPO_H - 2).px(14).gap(10).items_center().rounded(8).cursor_pointer()
+            .when(on, (el) => el.bg(o.raised))
+            .when(!on, (el) => el.hover((s) => s.bg(o.raised)))
+            .child(icon("pr", o.dim, 14))
+            .child(div().flex_1().truncate().font_family(MONO).text_size(12.5).text_color(o.fg).child(r.repo))
+            .child(div().flex_none().text_size(11.5).text_color(o.dim).child(`pushed ${ago(r.pushed)}`))) });
       });
-      return items;
+      return { notes, entries, after };
     }
     const l = this.lists[this.tab];
     const shown = this.shown;
-    if (l?.error) items.push(this.note(o, l.error, o.fix));
+    if (l?.error) notes.push(this.note(o, l.error, o.fix));
     else if (!shown.length) {
       const empty = this.err ? "" : !l?.loaded || l.loading ? "Loading…" : this.filter ? "No pull request matches." : this.tab === "review" ? "Nothing waiting on your review." : "No open pull requests.";
-      if (empty) items.push(this.note(o, empty));
+      if (empty) notes.push(this.note(o, empty));
     }
     let last = null;
     shown.forEach((pr, i) => {
       if (pr.group !== last) {
-        items.push(this.heading(o, groupOf(pr.group), shown.filter((p) => p.group === pr.group).length, last === null));
+        const g = groupOf(pr.group);
+        const n = shown.filter((p) => p.group === pr.group).length;
+        entries.push({ key: `h-${pr.group}`, h: HEADING_H, el: () => this.heading(o, g, n) });
         last = pr.group;
       }
-      items.push(this.card(o, pr, i === this.at, i));
+      this.entryOf[i] = entries.length;
+      entries.push({ key: `pr-${pr.key}`, row: i, h: CARD_H, el: () => div().h(CARD_H).pb(2).child(this.card(o, pr, i === this.at, i)) });
     });
-    if (l?.next) items.push(div().px(14).py(8).text_size(12).text_color(o.dim).child(l.loading ? "Loading more…" : "More below: ↓ loads them"));
-    if (l?.warning) items.push(div().px(14).py(6).text_size(11.5).text_color(o.dim).child(l.warning));
-    return items;
+    if (l?.next) after.push(div().px(14).py(6).text_size(12).text_color(o.dim).child(l.loading ? "Loading more…" : "More below: ↓ loads them"));
+    if (l?.warning) after.push(div().px(14).py(6).text_size(11.5).text_color(o.dim).child(l.warning));
+    return { notes, entries, after };
+  }
+
+  listView(o) {
+    const { notes, entries, after } = this.listBody(o);
+    return v_flex().flex_1().min_h(0).gap(2)
+      .children(notes)
+      .when(entries.length > 0, (el) => el.child(
+        div().relative().h(Math.min(LIST_H, entries.reduce((h, e) => h + e.h, 0))).min_h(0).flex_shrink(1)
+          .child(v_virtual_list("gh-rows", entries.length, entries.map((e) => e.h), (i) => entries[i].key,
+            (range) => entries.slice(range.start, range.end).map((e) => e.el())).track_scroll(this.scroll).size_full()
+            // A click chooses a row; on the chosen one, opens it.
+            .on_item_click((key, cx) => {
+              const e = entries.find((x) => x.key === key);
+              if (e?.row == null) return;
+              if (e.row === this.at) return this.enter(cx);
+              this.at = e.row;
+              cx.notify();
+            }))
+          .child(Scrollbar.vertical("gh-rows").absolute().inset_0())))
+      .children(after);
+  }
+
+  // Keeps the chosen row in sight: the first, with its heading.
+  follow() {
+    const e = this.entryOf?.[this.at];
+    if (e == null) return;
+    this.scroll.scroll_to_item(this.at === 0 ? 0 : e);
   }
 
   // The PR screen: what it is, whether it can merge and why not, its checks,
@@ -1200,7 +1246,7 @@ export default class GitHub extends View {
             .child(div().flex_none().text_size(12).text_color(o.muted).child(summary)),
         )
         .child(this.tabBar(t, o))
-        .child(v_flex().id("gh-list").h(560).min_h(0).flex_shrink(1).gap(2).overflow_y_scrollbar().children(this.listBody(o))))
+        .child(this.listView(o)))
       .when(Boolean(pr), (el) => el.child(this.prView(o)))
       .when(Boolean(this.menu), (el) => el.child(this.menuView(o)))
       .when(Boolean(note), (el) => el.child(h_flex().flex_none().gap(8).items_center()
