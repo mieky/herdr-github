@@ -96,9 +96,9 @@ async function job(req, machine, limitMs = 10 * 60000) {
 }
 
 const TABS = [
-  { id: "mine", label: "Mine" },
-  { id: "review", label: "Review requested", short: "Review" },
-  { id: "repo", label: "This repo" },
+  { id: "mine", label: "Mine", icon: "person" },
+  { id: "review", label: "Review requested", short: "Review", icon: "need" },
+  { id: "repo", label: "This repo", icon: "pr" },
 ];
 
 const machineOf = (address) => (address?.includes("/") ? address.split("/")[0] : null);
@@ -870,7 +870,9 @@ export default class GitHub extends View {
             this.picking = false;
             cx.notify();
           })
-          .when(Boolean(l?.loading), (el) => el.child(icon("work", o.accent, 11).spin(1100)))
+          // Its icon, the spinner in its place while it loads: the same
+          // size, so the tabs never move.
+          .child(l?.loading ? icon("work", o.accent, 12).spin(1100) : icon(tb.icon, on ? o.fg : o.dim, 12))
           .child(div().when(on, (el) => el.font_semibold()).when(!on, (el) => el.font_medium()).text_color(on ? o.fg : o.muted).child(label))
           .child(div().font_medium().text_color(on ? o.muted : o.dim).child(n));
       }))
