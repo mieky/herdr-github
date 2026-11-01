@@ -165,6 +165,9 @@ func badgeTokens(s *prStatus) map[string]string {
 		if s.AutoMergeRequest != nil {
 			parts = append(parts, "auto")
 		}
+		if s.MergeQueueEntry != nil {
+			parts = append(parts, "queued")
+		}
 	}
 	t["pr_badge"] = strings.Join(parts, " ")
 	return t

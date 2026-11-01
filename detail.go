@@ -216,6 +216,8 @@ func readiness(d *prDetail) (text string, style lipgloss.Style) {
 		return "Draft: mark it ready for review (d) before it can merge", styleDim
 	case d.Mergeable == "CONFLICTING" || d.MergeStateStatus == "DIRTY":
 		return "Conflicts with " + d.BaseRefName + ": resolve them before merging", styleErr
+	case d.MergeQueueEntry != nil:
+		return queued(d.MergeQueueEntry)
 	}
 	failing, pending := requiredCounts(d.Checks)
 	var s string
@@ -245,10 +247,52 @@ func readiness(d *prDetail) (text string, style lipgloss.Style) {
 	default:
 		s, style = "GitHub is still working out whether it can merge (ctrl+r)", styleDim
 	}
+	if d.IsMergeQueueEnabled && (d.MergeStateStatus == "CLEAN" || d.MergeStateStatus == "HAS_HOOKS") {
+		s += ": through the merge queue"
+	}
 	if !d.ViewerCanMerge {
 		s += " · you can't merge in this repo"
 	}
 	return s, style
+}
+
+// queued is where a PR is in its merge queue, in words: its place, what's
+// happening to it, and how long GitHub expects.
+func queued(q *queueEntry) (string, lipgloss.Style) {
+	what := map[string]string{
+		"QUEUED":          "waiting its turn",
+		"AWAITING_CHECKS": "its checks are running",
+		"MERGEABLE":       "about to merge",
+		"UNMERGEABLE":     "it can't merge, and will be taken out",
+		"LOCKED":          "merging now",
+	}[q.State]
+	if what == "" {
+		what = strings.ToLower(q.State)
+	}
+	s := fmt.Sprintf("In the merge queue, %s in line: %s", ordinal(q.Position), what)
+	if q.EstimatedTimeToMerge != nil && *q.EstimatedTimeToMerge > 0 {
+		s += fmt.Sprintf(" · about %d min", max(1, (*q.EstimatedTimeToMerge+30)/60))
+	}
+	if q.State == "UNMERGEABLE" {
+		return s, styleErr
+	}
+	return s, styleTree
+}
+
+// ordinal is 1st, 2nd, 3rd, 4th, … 11th, 12th, 13th, … 21st.
+func ordinal(n int) string {
+	suffix := "th"
+	if n%100 < 11 || n%100 > 13 {
+		switch n % 10 {
+		case 1:
+			suffix = "st"
+		case 2:
+			suffix = "nd"
+		case 3:
+			suffix = "rd"
+		}
+	}
+	return fmt.Sprintf("%d%s", n, suffix)
 }
 
 func requiredCounts(cs []check) (failing, pending int) {
@@ -294,6 +338,9 @@ func (m model) mergeMenu() (tea.Model, tea.Cmd) {
 		m.err = "You don't have permission to merge in " + d.Repository.NameWithOwner + "."
 		return m, nil
 	}
+	if d.IsMergeQueueEnabled {
+		return m.queueMenu()
+	}
 	methods := orderMethods(d.RepoSettings.methods(), preferredMethod(d.repo(), d.RepoSettings.ViewerDefaultMergeMethod))
 	mn := &menu{title: fmt.Sprintf("Merge #%d into %s", d.Number, d.BaseRefName)}
 	if d.AutoMergeRequest != nil {
@@ -327,6 +374,57 @@ func (m model) mergeMenu() (tea.Model, tea.Cmd) {
 	}
 	mn.items = append(mn.items, menuItem{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }})
 	return m.openMenu(mn), nil
+}
+
+// queueMenu is the merge menu where the base branch has a merge queue: the
+// queue merges it, by its own method, once it's through. In the queue, it
+// can be taken out; ready (or only waiting on checks the queue will run),
+// put in; otherwise why not.
+func (m model) queueMenu() (tea.Model, tea.Cmd) {
+	d := m.curDetail
+	mn := &menu{title: fmt.Sprintf("Merge #%d into %s, through its merge queue", d.Number, d.BaseRefName)}
+	if d.MergeQueueEntry != nil {
+		mn.items = append(mn.items, menuItem{label: "Take it out of the merge queue", run: func(m model) (tea.Model, tea.Cmd) {
+			client, ctx, key := m.client, m.ctx, d.key()
+			return m.busy("Taking it out of the merge queue…", func() prChangedMsg {
+				return prChangedMsg{key: key, flash: fmt.Sprintf("#%d is out of the merge queue", d.Number), err: client.dequeue(ctx, d)}
+			})
+		}})
+	} else {
+		failing, _ := requiredCounts(d.Checks)
+		onlyWaiting := d.MergeStateStatus == "BLOCKED" && failing == 0 &&
+			d.ReviewDecision != "CHANGES_REQUESTED" && d.ReviewDecision != "REVIEW_REQUIRED"
+		if !mergeableNow(d) && !onlyWaiting {
+			reason, _ := readiness(d)
+			m.err = "It can't join the merge queue yet: " + reason
+			return m, nil
+		}
+		mn.items = append(mn.items, menuItem{label: "Add it to the merge queue", run: func(m model) (tea.Model, tea.Cmd) {
+			return m.openMenu(confirmQueue(d)), nil
+		}})
+	}
+	mn.items = append(mn.items, menuItem{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }})
+	return m.openMenu(mn), nil
+}
+
+// confirmQueue asks once more before a PR joins the merge queue.
+func confirmQueue(d *prDetail) *menu {
+	return &menu{
+		title:  fmt.Sprintf("Add #%d to the merge queue for %s? It merges when its turn comes.", d.Number, d.BaseRefName),
+		cursor: 1, noDigits: true,
+		items: []menuItem{
+			{label: "Add it to the queue", run: func(m model) (tea.Model, tea.Cmd) {
+				client, ctx, key := m.client, m.ctx, d.key()
+				return m.busy(fmt.Sprintf("Adding #%d to the merge queue…", d.Number), func() prChangedMsg {
+					if err := client.enqueue(ctx, d); err != nil {
+						return prChangedMsg{key: key, err: err}
+					}
+					return prChangedMsg{key: key, flash: fmt.Sprintf("#%d is in the merge queue", d.Number)}
+				})
+			}},
+			{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }},
+		},
+	}
 }
 
 // orderMethods puts the preferred method first, keeping GitHub's order otherwise.

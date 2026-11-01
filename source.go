@@ -35,6 +35,9 @@ type source interface {
 	setDraft(ctx context.Context, pr pullRequest, draft bool) error
 	merge(ctx context.Context, d *prDetail, method string, auto bool) error
 	disableAutoMerge(ctx context.Context, d *prDetail) error
+	// enqueue and dequeue: in and out of the base branch's merge queue.
+	enqueue(ctx context.Context, d *prDetail) error
+	dequeue(ctx context.Context, d *prDetail) error
 	deleteBranch(ctx context.Context, d *prDetail) error
 	// repos pages through the repos you can reach, for the repo list:
 	// the first page with cursor "", then each page's next until it's "".
@@ -173,6 +176,14 @@ func (s *githubSource) merge(ctx context.Context, d *prDetail, method string, au
 
 func (s *githubSource) disableAutoMerge(ctx context.Context, d *prDetail) error {
 	return s.client(d.Host).disableAutoMerge(ctx, d.ID)
+}
+
+func (s *githubSource) enqueue(ctx context.Context, d *prDetail) error {
+	return s.client(d.Host).enqueue(ctx, d)
+}
+
+func (s *githubSource) dequeue(ctx context.Context, d *prDetail) error {
+	return s.client(d.Host).dequeue(ctx, d.ID)
 }
 
 func (s *githubSource) deleteBranch(ctx context.Context, d *prDetail) error {

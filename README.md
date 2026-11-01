@@ -284,6 +284,22 @@ code you haven't seen (press ctrl+r and look again).
 A draft, a PR with conflicts, or a repo where you can't merge gets a line
 saying so instead of a menu.
 
+### Through a merge queue
+
+Where the base branch has a **merge queue**, the queue merges the PR, by its
+own method, when its turn comes, so `m` offers no methods:
+
+- **Add it to the merge queue**, when it's ready (or only waiting on checks
+  the queue runs anyway). It asks once more, and is pinned to the commit you
+  were looking at, as a merge is.
+- **Take it out of the merge queue**, once it's in.
+
+The PR screen says where it is: *In the merge queue, 2nd in line: its checks
+are running · about 9 min*, and before it joins, *Ready to merge: through the
+merge queue*. In the lists it's under **Waiting**, marked `queued 2nd`, and
+its sidebar badge ends in `queued`. The demo's `halcyon/sync-server` has a
+queue: try #121.
+
 After a merge, the popup offers to **delete the branch** on GitHub (unless
 the repo does that itself, or the branch is in someone's fork) and to
 **remove the worktree**, which closes its space. Neither is forced: a

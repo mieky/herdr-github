@@ -1200,6 +1200,9 @@ func (m model) detailLine(pr *pullRequest, hot bool) (info []string, from, to in
 	if pr.AutoMergeRequest != nil {
 		info = append(info, styleTree.Render("auto-merge"))
 	}
+	if q := pr.MergeQueueEntry; q != nil {
+		info = append(info, styleTree.Render("queued "+ordinal(q.Position)))
+	}
 	if m.worktrees[pr.key()] {
 		info = append(info, styleTree.Render("worktree"))
 	}

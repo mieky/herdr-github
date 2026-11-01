@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-11-01
+
+- **Merge queues.** Where a PR's base branch has a merge queue, `m` adds it
+  to the queue (after a confirmation, pinned to the commit on screen) or
+  takes it out, instead of offering merge methods the queue would ignore.
+  The PR screen says its place, what's happening to it and GitHub's estimate
+  (*In the merge queue, 1st in line: its checks are running · about 9
+  min*); the lists mark it `queued 1st` under Waiting, and its sidebar badge
+  says `queued`. The demo's sync-server has a queue, with #121 ready to join.
 
 - **A branch's pull request, for programs that can't see the labels.**
   `herdr-github prs '[{"remote": …, "branch": …, "head": …, "owner": …}]'`

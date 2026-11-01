@@ -30,6 +30,9 @@ func groupOf(pr pullRequest, t tab) group {
 		return groupDone
 	case pr.IsDraft:
 		return groupDrafts
+	// In a merge queue: its turn is coming.
+	case pr.MergeQueueEntry != nil:
+		return groupWaiting
 	case failing || pr.Mergeable == "CONFLICTING" || pr.ReviewDecision == "CHANGES_REQUESTED":
 		return groupFixing
 	case t == tabReview:

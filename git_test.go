@@ -531,6 +531,10 @@ func TestBadgeTokens(t *testing.T) {
 				EnabledAt string `json:"enabledAt"`
 			}{"x"}}, "#6 ● auto"},
 		{prStatus{Number: 7, State: "OPEN"}, "#7"},
+		{prStatus{Number: 8, State: "OPEN", ReviewDecision: "APPROVED", Commits: rollupOf([]check{{Typename: "StatusContext", State: "SUCCESS"}}),
+			MergeQueueEntry: &struct {
+				Position int `json:"position"`
+			}{2}}, "#8 ✓ approved queued"},
 	}
 	for _, c := range cases {
 		if got := badgeTokens(&c.s)["pr_badge"]; got != c.want {

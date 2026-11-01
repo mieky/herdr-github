@@ -352,3 +352,30 @@ func TestViewerReposPages(t *testing.T) {
 		t.Fatalf("%+v %v", rs, err)
 	}
 }
+
+func TestQueueMutations(t *testing.T) {
+	var got []gqlRequest
+	var mu sync.Mutex
+	fakeGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		got = append(got, decodeReq(t, r))
+		mu.Unlock()
+		reply(w, map[string]any{})
+	})
+	c := newClient("github.com")
+	d := &prDetail{HeadRefOid: "abc123"}
+	d.ID = "PR_1"
+	if err := c.enqueue(context.Background(), d); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.dequeue(context.Background(), "PR_1"); err != nil {
+		t.Fatal(err)
+	}
+	// Pinned to the head commit shown, as a merge is.
+	if !strings.Contains(got[0].Query, "enqueuePullRequest") || got[0].Variables["oid"] != "abc123" || got[0].Variables["id"] != "PR_1" {
+		t.Fatalf("enqueue: %+v", got[0])
+	}
+	if !strings.Contains(got[1].Query, "dequeuePullRequest(input: {id: $id})") || got[1].Variables["id"] != "PR_1" {
+		t.Fatalf("dequeue: %+v", got[1])
+	}
+}

@@ -16,7 +16,7 @@ func plain(m model) string { return stripStyles(m.View()) }
 func TestTabsListAndGroup(t *testing.T) {
 	m := demoModel(t, tabMine)
 	v := plain(m)
-	for _, want := range []string{"Mine 4", "notes-app · 30m", "sync-server · 5h", "#482", "Offline edits",
+	for _, want := range []string{"Mine 5", "notes-app · 30m", "sync-server · 5h", "#482", "Offline edits",
 		"sam/offline-conflicts · +318 −74 · approved · ✓ checks · worktree", "✗ checks", "changes requested"} {
 		if !strings.Contains(v, want) {
 			t.Fatalf("mine tab lacks %q:\n%s", want, v)
@@ -24,7 +24,7 @@ func TestTabsListAndGroup(t *testing.T) {
 	}
 	// Grouped by whose move it is, yours first, each heading with its count.
 	last := -1
-	for _, heading := range []string{"Needs fixing 2", "Ready to merge 1", "Drafts 1"} {
+	for _, heading := range []string{"Needs fixing 2", "Ready to merge 2", "Drafts 1"} {
 		at := strings.Index(v, heading)
 		if at < last || at < 0 {
 			t.Fatalf("%q missing or out of order:\n%s", heading, v)
@@ -127,7 +127,7 @@ func TestGroupsAreWhoseMoveItIs(t *testing.T) {
 	changed := *m.cur
 	changed.ReviewDecision = "CHANGES_REQUESTED"
 	m.replaceRow(changed)
-	if m = press(m, "esc"); m.selected().pr.Number != 482 || !strings.Contains(plain(m), "Needs fixing 3") || strings.Contains(plain(m), "Ready to merge") {
+	if m = press(m, "esc"); m.selected().pr.Number != 482 || !strings.Contains(plain(m), "Needs fixing 3") || !strings.Contains(plain(m), "Ready to merge 1") {
 		t.Fatalf("on #%d:\n%s", m.selected().pr.Number, plain(m))
 	}
 }
@@ -155,7 +155,7 @@ func TestTabBarFitsTheWidth(t *testing.T) {
 		}
 	}
 	wide := plain(demoModel(t, tabMine))
-	if !strings.HasPrefix(wide, "  Mine 4  Review requested 3  notes-app 7 ") {
+	if !strings.HasPrefix(wide, "  Mine 5  Review requested 3  notes-app 7 ") {
 		t.Fatalf("with room for it all:\n%s", wide)
 	}
 }
@@ -609,7 +609,7 @@ func TestRepoPickerSwitchesTheRepoTab(t *testing.T) {
 	if m.repo == nil || m.repo.Name != "sync-server" || m.tab != tabRepo {
 		t.Fatalf("switched to %+v", m.repo)
 	}
-	if v := plain(m); !strings.Contains(v, "sync-server 1") || !strings.Contains(v, "Return merge proposals") || strings.Contains(v, "Offline edits") {
+	if v := plain(m); !strings.Contains(v, "sync-server 2") || !strings.Contains(v, "Return merge proposals") || strings.Contains(v, "Offline edits") {
 		t.Fatalf("repo tab after switching:\n%s", v)
 	}
 	// The space's own repo is still the one marked as this space's.
@@ -735,5 +735,57 @@ func TestRepoTabOutsideARepoOpensTheList(t *testing.T) {
 	m = drive(next.(model), cmd)
 	if m.menu == nil || m.menu.id != "repos" {
 		t.Fatalf("the repo tab with no repo should show the repo list:\n%s", plain(m))
+	}
+}
+
+// A base branch with a merge queue: m adds the PR to the queue (after a
+// confirmation that starts on Cancel), the screen and the list say where it
+// is, and m again takes it out. No method to choose: the queue merges it.
+func TestMergeQueue(t *testing.T) {
+	m := press(onPR(t, demoModel(t, tabMine), 121), "enter") // sync-server merges through a queue
+	if v := plain(m); !strings.Contains(v, "Ready to merge: through the merge queue") {
+		t.Fatalf("readiness should name the queue:\n%s", v)
+	}
+	m = press(m, "m")
+	if m.menu == nil || !strings.Contains(m.menu.title, "through its merge queue") || m.menu.items[0].label != "Add it to the merge queue" || len(m.menu.items) != 2 {
+		t.Fatalf("queue menu: %+v", m.menu)
+	}
+	m = press(m, "enter")
+	if m.menu == nil || !strings.Contains(m.menu.title, "Add #121 to the merge queue for main?") {
+		t.Fatalf("should ask to confirm: %+v", m.menu)
+	}
+	if m2 := press(m, "enter"); m2.cur.MergeQueueEntry != nil {
+		t.Fatal("the confirmation must start on Cancel")
+	}
+	m = press(m, "up", "enter")
+	if m.cur.MergeQueueEntry == nil || !strings.Contains(m.flash, "#121 is in the merge queue") {
+		t.Fatalf("not queued: flash=%q err=%q", m.flash, m.err)
+	}
+	if v := plain(m); !strings.Contains(v, "In the merge queue, 1st in line: its checks are running · about 9 min") {
+		t.Fatalf("the screen should say where it is:\n%s", v)
+	}
+	if v := plain(press(m, "esc")); !strings.Contains(v, "queued 1st") {
+		t.Fatalf("the row should say it's queued:\n%s", v)
+	}
+	m = press(m, "m")
+	if m.menu == nil || m.menu.items[0].label != "Take it out of the merge queue" {
+		t.Fatalf("in the queue, m should offer to take it out: %+v", m.menu)
+	}
+	m = press(m, "enter")
+	if m.cur.MergeQueueEntry != nil || !strings.Contains(m.flash, "out of the merge queue") {
+		t.Fatalf("not dequeued: flash=%q err=%q", m.flash, m.err)
+	}
+	// Changes requested: it can't join yet, and says why.
+	m = press(onPR(t, demoModel(t, tabMine), 118), "enter", "m")
+	if m.menu != nil || !strings.Contains(m.err, "can't join the merge queue yet: Blocked: changes requested") {
+		t.Fatalf("118: menu=%+v err=%q", m.menu, m.err)
+	}
+}
+
+func TestOrdinal(t *testing.T) {
+	for n, want := range map[int]string{1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 11: "11th", 12: "12th", 13: "13th", 21: "21st", 102: "102nd", 111: "111th"} {
+		if got := ordinal(n); got != want {
+			t.Errorf("ordinal(%d) = %q, want %q", n, got, want)
+		}
 	}
 }

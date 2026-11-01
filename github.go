@@ -98,6 +98,16 @@ type pullRequest struct {
 		EnabledAt   string `json:"enabledAt"`
 		MergeMethod string `json:"mergeMethod"`
 	} `json:"autoMergeRequest"`
+	// Its place in its base branch's merge queue, while it's in one.
+	MergeQueueEntry *queueEntry `json:"mergeQueueEntry"`
+}
+
+// queueEntry is a PR's place in a merge queue.
+type queueEntry struct {
+	Position int    `json:"position"`
+	State    string `json:"state"` // QUEUED, AWAITING_CHECKS, MERGEABLE, UNMERGEABLE, LOCKED
+	// GitHub's guess at how long until it merges, in seconds; the PR screen's.
+	EstimatedTimeToMerge *int `json:"estimatedTimeToMerge"`
 }
 
 // checks is the head commit's combined check state: SUCCESS, FAILURE, ERROR,
@@ -215,6 +225,8 @@ type prDetail struct {
 	ChangedFiles        int    `json:"changedFiles"`
 	HeadRefOid          string `json:"headRefOid"`
 	MaintainerCanModify bool   `json:"maintainerCanModify"`
+	// Whether its base branch merges through a merge queue.
+	IsMergeQueueEnabled bool `json:"isMergeQueueEnabled"`
 	HeadRef             *struct {
 		ID string `json:"id"`
 	} `json:"headRef"`
@@ -416,6 +428,7 @@ fragment PR on PullRequest {
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
   labels(first: 6) { nodes { name color } }
   autoMergeRequest { enabledAt mergeMethod }
+  mergeQueueEntry { position state }
 }`
 
 const searchQuery = `query($q: String!, $first: Int!, $after: String) {
@@ -492,6 +505,8 @@ const detailQuery = `query($id: ID!, $n: Int!) {
     ... on PullRequest {
       ...PR
       body mergeStateStatus changedFiles headRefOid maintainerCanModify
+      isMergeQueueEnabled
+      mergeQueueEntry { estimatedTimeToMerge }
       headRef { id }
       viewerCanMergeAsAdmin
       repository {
@@ -633,6 +648,21 @@ func (c *ghClient) merge(ctx context.Context, d *prDetail, method string, auto b
 }`, vars, nil)
 }
 
+// enqueue adds the PR to its base branch's merge queue, which merges it
+// when its turn comes, by the queue's own method. Pinned to the head commit,
+// as merge is.
+func (c *ghClient) enqueue(ctx context.Context, d *prDetail) error {
+	return c.graphql(ctx, `mutation($id: ID!, $oid: GitObjectID) {
+  enqueuePullRequest(input: {pullRequestId: $id, expectedHeadOid: $oid}) { clientMutationId }
+}`, map[string]any{"id": d.ID, "oid": d.HeadRefOid}, nil)
+}
+
+// dequeue takes the PR out of the merge queue.
+func (c *ghClient) dequeue(ctx context.Context, prID string) error {
+	return c.graphql(ctx, `mutation($id: ID!) { dequeuePullRequest(input: {id: $id}) { clientMutationId } }`,
+		map[string]any{"id": prID}, nil)
+}
+
 func (c *ghClient) disableAutoMerge(ctx context.Context, prID string) error {
 	return c.graphql(ctx, `mutation($id: ID!) { disablePullRequestAutoMerge(input: {pullRequestId: $id}) { clientMutationId } }`,
 		map[string]any{"id": prID}, nil)
@@ -658,6 +688,9 @@ type prStatus struct {
 	AutoMergeRequest    *struct {
 		EnabledAt string `json:"enabledAt"`
 	} `json:"autoMergeRequest"`
+	MergeQueueEntry *struct {
+		Position int `json:"position"`
+	} `json:"mergeQueueEntry"`
 	ClosedAt *time.Time `json:"closedAt,omitempty"` // when it was merged or closed, where that was asked
 }
 
@@ -692,6 +725,7 @@ func (c *ghClient) prsForBranches(ctx context.Context, r repoRef, heads []branch
   number state isDraft reviewDecision mergeable url headRepositoryOwner { login }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
   autoMergeRequest { enabledAt }
+  mergeQueueEntry { position }
 } }`, i)
 	}
 	b.WriteString(" } }")
@@ -754,6 +788,7 @@ func (c *ghClient) prsByNumber(ctx context.Context, r repoRef, numbers []int) (m
   number state isDraft reviewDecision mergeable url closedAt headRepositoryOwner { login }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
   autoMergeRequest { enabledAt }
+  mergeQueueEntry { position }
 }`, i)
 	}
 	b.WriteString(" } }")

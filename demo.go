@@ -116,6 +116,17 @@ func newDemoSource() *demoSource {
 	p.Reviewers = []reviewer{{"jonas", "CHANGES_REQUESTED"}}
 	p.Body = "The server side of halcyon/notes-app#482."
 	p.Reviews = []comment{{Author: &actor{"jonas"}, State: "CHANGES_REQUESTED", Body: "The proposal should carry the base revision, or the client can't tell a stale one.", CreatedAt: h(6)}}
+	p.IsMergeQueueEnabled = true
+	add(p)
+
+	// sync-server's main merges through a merge queue: this one's ready to join it.
+	p = pr("halcyon/sync-server", 121, "Back off on 429s from the push service", "sam", "sam/push-backoff", 3)
+	p.Additions, p.Deletions, p.ChangedFiles = 64, 9, 2
+	p.ReviewDecision, p.MergeStateStatus = "APPROVED", "CLEAN"
+	p.Checks = pass("build", "test")
+	p.Reviewers = []reviewer{{"jonas", "APPROVED"}}
+	p.Body = "Retries a rate-limited push with exponential backoff and jitter, up to five tries, instead of dropping it."
+	p.IsMergeQueueEnabled = true
 	add(p)
 
 	// Waiting on Sam's review.
@@ -334,6 +345,21 @@ func (d *demoSource) disableAutoMerge(_ context.Context, pd *prDetail) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.find(pd.key()).AutoMergeRequest = nil
+	return nil
+}
+
+func (d *demoSource) enqueue(_ context.Context, pd *prDetail) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	eta := 540
+	d.find(pd.key()).MergeQueueEntry = &queueEntry{Position: 1, State: "AWAITING_CHECKS", EstimatedTimeToMerge: &eta}
+	return nil
+}
+
+func (d *demoSource) dequeue(_ context.Context, pd *prDetail) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.find(pd.key()).MergeQueueEntry = nil
 	return nil
 }
 
