@@ -12,7 +12,7 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextView } from "gpui-base";
 import { agents, panes, machines, spaces, run, exec, theme, props, closeOverlay, nextCommand, knownAgents } from "herdr";
 import { demoAgents, DEMO_REPO } from "./demo.js";
-import { tones, tint, groupOf, toneColor, prLook, checkLook, ago, icon, chip, words, key, MONO } from "./look.js";
+import { tones, tint, countPill, groupOf, toneColor, prLook, checkLook, ago, icon, chip, words, key, MONO } from "./look.js";
 
 // The herdr-github this mod is part of (its release; the repo's tests hold it
 // to herdr-plugin.toml's version).
@@ -874,7 +874,7 @@ export default class GitHub extends View {
           // size, so the tabs never move.
           .child(l?.loading ? icon("work", o.accent, 12).spin(1100) : icon(tb.icon, on ? o.fg : o.dim, 12))
           .child(div().when(on, (el) => el.font_semibold()).when(!on, (el) => el.font_medium()).text_color(on ? o.fg : o.muted).child(label))
-          .child(div().font_medium().text_color(on ? o.muted : o.dim).child(n));
+          .child(countPill(o, n, on));
       }))
       .child(div().flex_1())
       .when(this.tab === "repo", (el) => el.child(words(o, [[[this.picking && this.repo ? "Back to the repo" : "Change repo", o.accent, (cx) => {

@@ -185,3 +185,23 @@ export function key(o, keys, label, click, id) {
     .children(keys.map((k) => cap(o, k)))
     .child(div().child(label));
 }
+
+// A tab's count, in a pill wide enough for it from the start: "–" until
+// it's known, so the tabs don't move when it comes.
+export function countPill(o, n, on) {
+  return div()
+    .flex_none()
+    .min_w(24)
+    .h(18)
+    .px(6)
+    .flex()
+    .items_center()
+    .justify_center()
+    .rounded(9)
+    .bg(on ? o.sunk : tint(o.line, 0.6))
+    .font_family(MONO)
+    .text_size(11)
+    .font_medium()
+    .text_color(on ? o.fg : o.dim)
+    .child(n == null || n === "" ? "–" : String(n));
+}
