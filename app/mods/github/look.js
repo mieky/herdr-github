@@ -149,14 +149,31 @@ export function words(o, groups, idBase) {
   return h_flex().gap(8).items_center().flex_wrap().children(out);
 }
 
+// What's drawn on a keycap: the keys with a symbol of their own as icons
+// (enter as an arrow down and left, ⌃, ⌘, tab, the arrows), letters
+// capitalised as on the key; "^g" or "ctrl-g" is ⌃G, "cmd-g" ⌘G.
+const KEY_ICONS = {
+  enter: "key-enter", "⏎": "key-enter", "↵": "key-enter",
+  tab: "key-tab", "⇥": "key-tab",
+  "↑": "key-up", up: "key-up", "↓": "key-down", down: "key-down",
+  "←": "key-left", left: "key-left", "→": "key-right", right: "key-right",
+  ctrl: "key-ctrl", "^": "key-ctrl", "⌃": "key-ctrl",
+  cmd: "key-cmd", "⌘": "key-cmd",
+};
+function keyParts(k) {
+  const m = /^(\^|ctrl[-+]|cmd[-+])(.+)$/i.exec(k);
+  if (m) return [m[1][0] === "^" ? "ctrl" : m[1].slice(0, -1).toLowerCase(), ...keyParts(m[2])];
+  return [KEY_ICONS[k.toLowerCase()] ? k.toLowerCase() : k.length === 1 ? k.toUpperCase() : k];
+}
+
 // One keycap.
 export function cap(o, k) {
-  return div()
+  return h_flex()
     .flex_none()
     .min_w(20)
     .h(20)
     .px(5)
-    .flex()
+    .gap(1)
     .items_center()
     .justify_center()
     .rounded(5)
@@ -167,7 +184,7 @@ export function cap(o, k) {
     .font_family(MONO)
     .text_size(11)
     .text_color(o.muted)
-    .child(k);
+    .children(keyParts(k).map((p) => (KEY_ICONS[p] ? icon(KEY_ICONS[p], o.muted, 11) : div().child(p))));
 }
 
 // A key in the footer: its keycaps and what it does. Clickable.
