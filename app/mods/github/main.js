@@ -10,7 +10,7 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextView } from "gpui-base";
-import { agents, panes, machines, spaces, run, exec, theme, props, closeOverlay, nextCommand, knownAgents } from "herdr";
+import { agents, panes, machines, spaces, run, exec, theme, props, closeOverlay, openOverlay, nextCommand, knownAgents } from "herdr";
 import { demoAgents, DEMO_REPO } from "./demo.js";
 import { tones, tint, countPill, groupOf, toneColor, prLook, checkLook, ago, icon, chip, words, key, MONO } from "./look.js";
 
@@ -404,6 +404,7 @@ export default class GitHub extends View {
   back(cx) {
     if (this.direct && this.from === "recap") {
       this.dismiss();
+      if (this.demo) return openOverlay({ mod: "recap", kind: "dialog", width: 0.8, height: 0.8, props: { demo: true } });
       return run("mod.open", { name: "recap" });
     }
     this.direct = false;
@@ -810,7 +811,7 @@ export default class GitHub extends View {
     for (const l of pr.labels.slice(0, 3)) chips.push(chip(o, id(`lb${l.name}`), [div().w(7).h(7).rounded_full().bg(`#${l.color}`), l.name]));
     if (ag.length) {
       const busy = ag.find((a) => a.status === "working");
-      chips.push(chip(o, id("ag"), [icon(busy ? "work" : "person", busy ? o.work : o.muted, 12), ag.length === 1 ? ag[0].name : `${ag.length} agents`]));
+      chips.push(chip(o, id("ag"), [busy ? icon("work", o.work, 12).spin(1100) : icon("person", o.muted, 12), ag.length === 1 ? ag[0].name : `${ag.length} agents`]));
     }
     if (this.treeOf(pr)) chips.push(chip(o, id("wt"), [icon("worktree", o.dim, 12), "worktree"]));
     return h_flex()
@@ -846,6 +847,12 @@ export default class GitHub extends View {
       );
   }
 
+  // A tab's name: the repo tab's is its repo's; short, where it's tight.
+  tabLabel(tb, short) {
+    if (tb.id === "repo" && this.repo) return this.repo.name;
+    return short ? tb.short ?? tb.label : tb.label;
+  }
+
   heading(o, g, n, first) {
     return h_flex().flex_none().px(10).pt(first ? 4 : 12).pb(4).gap(8).items_center().text_size(10.5)
       .child(div().font_semibold().text_color(o[g.tone]).child(g.label.toUpperCase()))
@@ -858,7 +865,7 @@ export default class GitHub extends View {
       .children(TABS.map((tb) => {
         const on = tb.id === this.tab;
         const l = this.lists[tb.id];
-        const label = tb.id === "repo" && this.repo ? this.repo.name : this.width < 700 ? tb.short ?? tb.label : tb.label;
+        const label = this.tabLabel(tb, this.width < 700);
         const n = l?.loaded && (tb.id !== "repo" || this.repo) ? `${l.prs.length}${l.next ? "+" : ""}` : "";
         return h_flex().id(`tab-${tb.id}`).flex_none().h(28).px(10).gap(7).items_center().rounded(7).cursor_pointer().text_size(12.5)
           .when(on, (el) => el.bg(o.raised).shadow_sm())
@@ -943,7 +950,7 @@ export default class GitHub extends View {
     const tree = this.treeOf(pr);
     const ag = this.agentsOf(pr);
     const now = Date.now();
-    const from = this.direct && this.from === "recap" ? "Recap" : TABS.find((x) => x.id === this.tab)?.short ?? TABS.find((x) => x.id === this.tab)?.label;
+    const from = this.direct && this.from === "recap" ? "Recap" : this.tabLabel(TABS.find((x) => x.id === this.tab), true);
 
     const checks = d?.checkList ?? [];
     const count = (x) => checks.filter((c) => c.outcome === x).length;

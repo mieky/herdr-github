@@ -171,6 +171,8 @@ checks, review, size, auto-merge or place in the merge queue, labels, its
 worktree and its agents. Type to filter; ← → change tabs, ↑ ↓ and Enter (or
 a click) open a PR.
 
+![A pull request's screen in the app, on the demo: ready to merge, its checks, reviewers, labels and the two agents on it, then its description](docs/images/app-pr.png)
+
 A PR's screen has whether it can merge and why not, its checks (the
 failing and running ones by name, a click away), reviewers, its agents, and
 the description, unresolved threads and conversation as Markdown. Its keys,
@@ -185,6 +187,8 @@ along the bottom and clickable:
 | `a` | its agents: go to one, or resume a closed Claude session where it ran |
 | `o` / `y` | open it on GitHub / copy its link |
 | `esc` | back to the list (or to Recap, when Recap opened it); out of the popup |
+
+![The merge menu on a PR whose branch merges through a merge queue](docs/images/app-merge.png)
 
 **Worktrees** go where the app's own worktrees do,
 `~/.herdr/worktrees/<repo>/<branch>`, made from the PR's head as GitHub has
