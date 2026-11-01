@@ -1,6 +1,8 @@
 # GitHub
 
-**Your pull requests, one key away from whatever you're working in.**
+Your pull requests in one popup, sorted by whose move it is: yours, the ones waiting on your review, and this repo's. Open one to see whether it can merge and why not, with its failing checks, reviews and conversation; merge it, auto-merge it or send it through the merge queue, or flip it between draft and ready. One key gives any PR a worktree in a space of its own, forks included, and one more starts Claude Code on it. Every PR shows the agents working on it and links to its Linear issue.
+
+![GitHub](preview.png)
 
 Agents open pull requests faster than anyone can keep track of them. This
 popup (⌘G) keeps them in one place, for every repo, whichever machine
