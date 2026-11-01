@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.2 - 2026-11-01
+
+- **A pull request's Linear issue, a link.** In the app, a PR whose branch,
+  title or description names a Linear issue (`sam/hal-212-…`, `Fixes
+  HAL-212`) shows it on its screen; a click, or `l`, opens it in
+  herdr-linear's Linear mod, and `esc` there comes back to the PR. The
+  demo's #482 fixes HAL-212, which is in Linear's demo too.
+
 ## 0.10.1 - 2026-11-01
 
 (0.10.0 was tagged but never released: its tests failed on macOS.)

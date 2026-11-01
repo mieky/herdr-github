@@ -77,7 +77,7 @@ func newDemoSource() *demoSource {
 	p.Body = "When two devices edit the same note offline, the second sync used to drop the first device's edits.\n\n" +
 		"This keeps both: the server now returns a **merge proposal** and the client applies it as a three-way merge.\n\n" +
 		"### Changes\n\n- `SyncEngine` asks for a proposal instead of overwriting\n- New `ThreeWay.merge(base:ours:theirs:)`\n- Conflict markers only when a line changed on both sides\n\n" +
-		"### Testing\n\n```swift\nlet merged = ThreeWay.merge(base: b, ours: o, theirs: t)\nXCTAssertEqual(merged.conflicts, 0)\n```\n\nFixes HAL-231."
+		"### Testing\n\n```swift\nlet merged = ThreeWay.merge(base: b, ours: o, theirs: t)\nXCTAssertEqual(merged.conflicts, 0)\n```\n\nFixes HAL-212."
 	p.Reviews = []comment{
 		{Author: &actor{"jonas"}, State: "COMMENTED", Body: "Nice. One question on the proposal endpoint's timeout, inline.", CreatedAt: h(20)},
 		{Author: &actor{"priya"}, State: "APPROVED", Body: "Tested with two simulators in airplane mode: both edits land. Ship it.", CreatedAt: h(2)},

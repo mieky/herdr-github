@@ -9,14 +9,15 @@
 // needs onto each machine it asks, the first time.
 
 import { View, div } from "gpui-kit";
+import * as fs from "fs/promises";
 import { v_flex, h_flex, InputState, Input, TextView } from "gpui-base";
-import { agents, panes, machines, spaces, run, exec, theme, props, closeOverlay, openOverlay, nextCommand, knownAgents } from "herdr";
+import { agents, panes, machines, spaces, run, exec, theme, appHome, props, closeOverlay, openOverlay, nextCommand, knownAgents } from "herdr";
 import { demoAgents, DEMO_REPO } from "./demo.js";
 import { tones, tint, countPill, groupOf, toneColor, prLook, checkLook, ago, icon, chip, words, key, MONO } from "./look.js";
 
 // The herdr-github this mod is part of (its release; the repo's tests hold it
 // to herdr-plugin.toml's version).
-export const GITHUB_VERSION = "0.10.1";
+export const GITHUB_VERSION = "0.10.2";
 
 // Puts that release on a machine, once: into a folder of its own version, so
 // it never touches a herdr-github installed for the TUI. The archive for the
@@ -101,6 +102,25 @@ const TABS = [
   { id: "repo", label: "This repo", icon: "pr" },
 ];
 
+// A ticket's key in a branch or title ("sam/hal-212-merge", "HAL-212: …"), as
+// Recap finds one: its Linear issue, a link to the Linear mod.
+const TICKET = /(?:^|[^a-z0-9])([a-z][a-z0-9]{1,9})-([1-9][0-9]{0,5})(?=[^a-z0-9]|$)/gi;
+const NOT_TICKETS = new Set(("phase step part pr v version release issue fix bug test try attempt wave stage sprint " +
+  "week day round batch task milestone iteration option plan draft rev").split(" "));
+function ticketKey(...texts) {
+  for (const s of texts) {
+    for (const m of (s ?? "").matchAll(TICKET)) {
+      if (!NOT_TICKETS.has(m[1].toLowerCase())) return `${m[1].toUpperCase()}-${m[2]}`;
+    }
+  }
+  return null;
+}
+
+// GitHub's and Linear's magic words in a PR's description ("Fixes HAL-212"):
+// the issue it closes, when its branch and title don't say.
+const MAGIC = /\b(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?|part of|refs?)\s+([A-Za-z][A-Za-z0-9]{1,9}-[1-9][0-9]{0,5})\b/i;
+const issueOf = (pr, body) => ticketKey(pr?.head, pr?.title) ?? (MAGIC.exec(body ?? "")?.[1]?.toUpperCase() || null);
+
 const machineOf = (address) => (address?.includes("/") ? address.split("/")[0] : null);
 const prID = (pr) => ({ host: pr.host, repo: pr.repo, number: pr.number });
 
@@ -140,6 +160,12 @@ export default class GitHub extends View {
     this.on = localStorage.getItem("on"); // the machine gh is signed in on ("" here)
     this.width = 900;
     this.from = p.back ?? null; // the mod it was opened from, to go back to
+    // With herdr-linear's mod installed, a PR's Linear issue opens there.
+    this.linear = false;
+    cx.spawn(async (cx) => {
+      this.linear = (await fs.readFile(`${appHome()}/mods/linear/main.js`, "utf8").catch(() => null)) !== null;
+      cx.notify();
+    });
 
     this.keys = cx.focus_handle();
     this.input = InputState.new({ placeholder: "Type to filter…  ← → to change tabs" });
@@ -705,6 +731,19 @@ export default class GitHub extends View {
     run("space.new", spec);
   }
 
+  // Its Linear issue, on its screen in the Linear mod; esc there comes back
+  // to this PR.
+  openIssue(key, cx) {
+    if (!key) return;
+    if (!this.linear) return this.say(`${key}: herdr-linear's mod opens it here, when it's installed.`, cx);
+    const pr = this.cur;
+    this.dismiss();
+    openOverlay({ mod: "linear", kind: "dialog", width: 0.8, height: 0.8, props: {
+      issue: { key }, back: "github", demo: this.demo || undefined,
+      backTo: { mod: "github", props: { pr: { host: pr.host, repo: pr.repo, number: pr.number }, demo: this.demo || undefined } },
+    } });
+  }
+
   agentsKey(cx) {
     const list = this.agentsOf(this.cur);
     if (!list.length) return this.say("No agents on it yet: w opens its worktree, s starts one there.", cx);
@@ -764,6 +803,9 @@ export default class GitHub extends View {
         break;
       case "a":
         this.agentsKey(cx);
+        break;
+      case "l":
+        this.openIssue(issueOf(pr, this.detail?.body), cx);
         break;
       case "r":
         this.loadDetail(cx);
@@ -965,6 +1007,7 @@ export default class GitHub extends View {
       r.name, r.state === "PENDING" ? "requested" : r.state === "COMMENTED" ? "commented" : null,
     ], { color: r.state === "APPROVED" ? o.review : r.state === "CHANGES_REQUESTED" ? o.fix : null });
     const toneIcon = { ok: "done", err: "fix", queue: "queue", merged: "merged" }[d?.tone] ?? "idle";
+    const issueKey = issueOf(pr, d?.body);
     // The failing and running checks, by name, each a link to its run.
     const attention = checks.filter((c) => c.outcome === "fail" || c.outcome === "pending");
 
@@ -986,6 +1029,7 @@ export default class GitHub extends View {
         .child(field("Author", [icon("person", o.dim, 13), div().text_color(o.fg).child(d.author)]))
         .child(field("Branch", [chip(o, "head", [icon("branch", o.dim, 13), d.head], { mono: true }), div().text_color(o.dim).child("→"), chip(o, "base", [d.base], { mono: true }),
           tree ? chip(o, "tree", [icon("worktree", o.accent, 12), "worktree"], { color: o.accent }) : div().text_size(12).text_color(o.dim).child("no worktree yet")]))
+        .when(Boolean(issueKey), (el) => el.child(field("Issue", chip(o, "issue", [icon("pr", o.accent, 12), issueKey, this.linear ? "in Linear" : null], { color: o.accent, click: (cx) => this.openIssue(issueKey, cx) }))))
         .child(field("Changes", [div().text_color(o.review).child(`+${d.additions}`), div().text_color(o.fix).child(`−${d.deletions}`), div().text_color(o.dim).child(`· ${d.files} file${d.files === 1 ? "" : "s"}`)]))
         .child(field("Reviews", d.reviewers.length ? d.reviewers.map(reviewer) : div().text_size(12).text_color(o.dim).child("none yet")))
         .child(field("Checks", checks.length ? [bar, ...checkWords] : div().text_size(12).text_color(o.dim).child("none")))
@@ -1059,6 +1103,7 @@ export default class GitHub extends View {
         k(["m"], "merge", (cx) => this.mergeMenu(cx), "f-m"),
         k(["d"], this.detail?.draft ? "ready for review" : "draft", (cx) => this.toggleDraft(cx), "f-d"),
         k(["a"], "agents", (cx) => this.agentsKey(cx), "f-a"),
+        ...(issueOf(this.cur, this.detail?.body) ? [k(["l"], "issue", (cx) => this.openIssue(issueOf(this.cur, this.detail?.body), cx), "f-l")] : []),
         k(["o"], "GitHub", (cx) => this.open(this.cur.url, cx), "f-o"),
         k(["y"], "copy link", (cx) => this.copy(this.cur.url, cx), "f-y"),
         k(["esc"], "back", (cx) => this.escape(cx), "f-esc"),

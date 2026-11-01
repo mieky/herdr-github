@@ -159,6 +159,7 @@ along the bottom and clickable:
 | `m` | merge: the methods the repo allows, auto-merge, or its merge queue; asks first. After a merge, offers to delete the branch and remove the worktree |
 | `d` | draft ↔ ready for review |
 | `a` | its agents: go to one, or resume a closed Claude session where it ran |
+| `l` | its Linear issue (from its branch, title or a "Fixes HAL-212"), in herdr-linear's Linear mod |
 | `o` / `y` | open it on GitHub / copy its link |
 | `esc` | back to the list (or to Recap, when Recap opened it); out of the popup |
 
@@ -171,9 +172,12 @@ machine of the space you're in when it has a checkout of the repo, else on
 another machine with one. With none anywhere it offers to clone the repo
 (into `clone_root`, `~/code` by default).
 
-**With Recap.** With [herdr-recap](https://github.com/mrolafsson/herdr-recap)'s
+**With Recap and Linear.** With [herdr-recap](https://github.com/mrolafsson/herdr-recap)'s
 mod installed too, an agent's pull request there opens here, on its screen
-(a click, or `ctrl+g`), and `esc` goes back.
+(a click, or `ctrl+g`), and `esc` goes back. With
+[herdr-linear](https://github.com/mrolafsson/herdr-linear)'s, a PR's Linear
+issue is a link on its screen (a click, or `l`) to the Linear mod, and `esc`
+there comes back to the PR.
 
 **How it works.** The mod is the plugin's own code: it runs
 `herdr-github app` (one JSON request in, one answer out) on the machine
@@ -462,8 +466,8 @@ rows = [
 and reload with `herdr server reload-config`. A space then reads
 
 ```
-  ● HAL-231 Offline sync conflicts  #482 ✓ approved
-    hal-231-offline-sync-conflicts
+  ● HAL-212 Offline sync conflicts  #482 ✓ approved
+    hal-212-offline-sync-conflicts
 ```
 
 and an agent

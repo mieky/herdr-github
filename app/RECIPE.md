@@ -108,6 +108,7 @@ branches, numbers and keys.
 list, or to Recap if Recap opened it), then the popup. In the list: type to
 filter, ← → for the tabs, ↑ ↓ and Enter. On a PR: `w` worktree, `s` start an
 agent, `m` merge, `d` draft ↔ ready, `a` agents, `o` open on GitHub, `y`
-copy the link, `r` reload. Every key is also a click along the bottom.
+copy the link, `l` its Linear issue (in herdr-linear's Linear mod), `r`
+reload. Every key is also a click along the bottom.
 `github.demo` (with `herdr-app do`, while it's open) switches to a made-up
 org for that opening.
