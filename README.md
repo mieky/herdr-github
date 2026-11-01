@@ -1,13 +1,21 @@
 # herdr-github
 
-Your GitHub pull requests in a [herdr](https://herdr.dev) popup. See what's
-waiting on you, read a PR with its checks and reviews, flip it between draft
-and ready, merge it, and land in a worktree for it (forks included) without
-leaving the terminal. Every space and agent working on a PR's branch gets
-the PR in the sidebar: `#482 ✓ approved`. And each PR knows its agents: the one that
-opened it and any that worked on it since, a key or a click away.
+**Your pull requests, one key away from whatever you're working in.**
 
-![Your pull requests, on the built-in demo org](docs/images/mine.png)
+See what's waiting on you, read a PR with its checks and reviews, flip it
+between draft and ready, merge it (or auto-merge, or through a merge queue),
+and land in a worktree for it with an agent already on it, forks included:
+in the [Herdr app](https://herdr.dev), from any machine it's connected to,
+and in a [herdr](https://herdr.dev) TUI popup. Every PR knows its agents: the
+one that opened it and any that worked on it since, a key or a click away.
+
+![The GitHub mod in the Herdr app, on the demo org: your pull requests grouped by whose move it is, each with its branch, checks, review, size and agents](app/preview.png)
+
+*In the Herdr app.*
+
+![Your pull requests in the herdr TUI, on the built-in demo org](docs/images/mine.png)
+
+*In the herdr TUI.*
 
 - **Three tabs**: *Mine* (your open PRs, every repo), *Review requested*,
   and *this repo* (all open PRs in the repo you opened it from), each
@@ -26,16 +34,16 @@ opened it and any that worked on it since, a key or a click away.
   branch, tracking it. A fork's PR comes from `refs/pull/N/head` and pushes
   back to the fork.
 - **Start**: the worktree, plus a prompt for its new agent.
-- **Sidebar labels**: `$pr`, `$pr_badge` and friends on every space and
-  agent, kept current as you work.
+- **Sidebar labels** (TUI): `$pr`, `$pr_badge` and friends on every space
+  and agent, kept current as you work.
 - **Whose PR is this?** A PR lists the agents that opened it and worked on
   it; a key or a click goes to one, or resumes a session that's been
   closed. An agent's PRs, its branch's and the others it opened, are in the
   sidebar as `$prs`.
 - Uses **gh's sign-in**: no tokens of its own, GitHub Enterprise included.
 - Keyboard first, and the mouse works: every key along the bottom is a pill
-  you can click. In **herdr's theme colours**, with [one look](#colours)
-  shared by the herdr plugins.
+  you can click. In the **app's or herdr's theme colours**, with
+  [one look](#colours) shared by the herdr plugins.
 
 ## Works with the other herdr plugins
 
@@ -63,26 +71,30 @@ there is nothing to configure.
 
 See [Sidebar labels](#sidebar-labels) for the tags and [Opened from another popup](#opened-from-another-popup) for the convention behind the links.
 
-**Contents:** [Works with the other plugins](#works-with-the-other-herdr-plugins) · [Requirements](#requirements) · [Install](#install) ·
-[Try it without an account](#try-it-without-an-account) · [Use](#use) ·
+**Contents:** [Works with the other plugins](#works-with-the-other-herdr-plugins) · [Install](#install) · [Requirements](#requirements) ·
+[In the Herdr app](#in-the-herdr-app-1) · [Try it without an account](#try-it-without-an-account) · [In the herdr TUI](#in-the-herdr-tui-1) ·
 [Merging](#merging) · [Worktrees](#worktrees) · [Sidebar labels](#sidebar-labels) ·
 [Configuration](#configuration) · [Privacy and security](#privacy-and-security) ·
 [Troubleshooting](#troubleshooting) · [How it works](#how-it-works) ·
 [Development](#development)
 
-## Requirements
-
-- **herdr 0.9.0** or later, on **macOS** or **Linux** (arm64 or x86-64). On
-  Linux, `xdg-open` opens the browser, and copying needs `wl-copy`, `xclip`
-  or `xsel`.
-- **[gh](https://cli.github.com)**, signed in (`gh auth login`). The plugin
-  borrows its token.
-- **git**, for worktrees.
-- **Go 1.26.8+** to build from source. Without Go, installing downloads a
-  prebuilt binary from the matching GitHub release, checked against its
-  SHA-256 checksums.
-
 ## Install
+
+### In the Herdr app
+
+Ask the agent in your Herdr window to *add the mod at
+github.com/mrolafsson/herdr-github/tree/main/app*: it follows the app's own
+steps (it reads the mod, copies it into `mods/`, merges its keys and checks
+it). Or from a terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mrolafsson/herdr-github/main/install.sh | sh -s -- --app
+```
+
+That's all: the mod fetches what it needs onto the machines it works on by
+itself (see [In the Herdr app](#in-the-herdr-app-1)). ⌘G opens it.
+
+### In the herdr TUI
 
 ```sh
 herdr plugin install mrolafsson/herdr-github
@@ -122,6 +134,25 @@ server runs on, where the plugin is.
 > Profiles → Keys → Left Option key → *Esc+*; Terminal.app → Profiles →
 > Keyboard → *Use Option as Meta key*; Ghostty → `macos-option-as-alt = true`.
 
+### Both
+
+`sh install.sh` in a clone (or the `curl` line above without `-s -- --app`)
+installs whichever of the two is on the computer, and both when both are.
+
+### Requirements
+
+- **[gh](https://cli.github.com)**, signed in (`gh auth login`), on at least
+  one machine: herdr-github borrows its token. The app's mod finds the
+  machine that's signed in by itself.
+- **git**, for worktrees.
+- **macOS** or **Linux** (arm64 or x86-64).
+- The app's mod: the **Herdr app**, and `curl`, `tar` and `sha256sum` or
+  `shasum` on the machines it works on, which macOS and Linux have.
+- The TUI plugin: **herdr 0.9.0** or later. On Linux, `xdg-open` opens the
+  browser, and copying needs `wl-copy`, `xclip` or `xsel`. **Go 1.26.8+** to
+  build from source; without Go, installing downloads a prebuilt binary from
+  the matching GitHub release, checked against its SHA-256 checksums.
+
 ### From a local checkout
 
 ```sh
@@ -131,6 +162,49 @@ herdr plugin link "$PWD/herdr-github"
 ```
 
 After changing the code, run `scripts/build.sh` again; no need to re-link.
+
+## In the Herdr app
+
+⌘G opens a popup with the same three tabs (Mine, Review requested, and the
+shown space's repo), grouped the same way, as cards: each PR's branch,
+checks, review, size, auto-merge or place in the merge queue, labels, its
+worktree and its agents. Type to filter; ← → change tabs, ↑ ↓ and Enter (or
+a click) open a PR.
+
+A PR's screen has whether it can merge and why not, its checks (the
+failing and running ones by name, a click away), reviewers, its agents, and
+the description, unresolved threads and conversation as Markdown. Its keys,
+along the bottom and clickable:
+
+| key | does |
+|-----|------|
+| `w` | its worktree, in a space: opened if it has one, made if not |
+| `s` | start: the same, with an agent in it asked to look at the PR (a new worktree only) |
+| `m` | merge: the methods the repo allows, auto-merge, or its merge queue; asks first. After a merge, offers to delete the branch and remove the worktree |
+| `d` | draft ↔ ready for review |
+| `a` | its agents: go to one, or resume a closed Claude session where it ran |
+| `o` / `y` | open it on GitHub / copy its link |
+| `esc` | back to the list (or to Recap, when Recap opened it); out of the popup |
+
+**Worktrees** go where the app's own worktrees do,
+`~/.herdr/worktrees/<repo>/<branch>`, made from the PR's head as GitHub has
+it (a fork's from `refs/pull/N/head`, pushing back to the fork), on the
+machine of the space you're in when it has a checkout of the repo, else on
+another machine with one. With none anywhere it offers to clone the repo
+(into `clone_root`, `~/code` by default).
+
+**With Recap.** With [herdr-recap](https://github.com/mrolafsson/herdr-recap)'s
+mod installed too, an agent's pull request there opens here, on its screen
+(a click, or `ctrl+g`), and `esc` goes back.
+
+**How it works.** The mod is the plugin's own code: it runs
+`herdr-github app` (one JSON request in, one answer out) on the machine
+where gh is signed in, and for a worktree, on the machine with the
+checkout. The first time it asks a machine, it downloads the herdr-github
+release it names (`GITHUB_VERSION` in `main.js`), checks it against the
+release's `checksums.txt`, and keeps it in
+`~/.local/share/herdr-github/app/<version>/`, apart from any TUI install.
+`herdr-app do github.demo`, while it's open, switches to the demo org.
 
 ## Try it without an account
 
@@ -146,7 +220,7 @@ herdr plugin action invoke herdr-github.demo
 bin/herdr-github picker --demo
 ```
 
-## Use
+## In the herdr TUI
 
 ### The lists
 
@@ -379,8 +453,8 @@ rows = [
 and reload with `herdr server reload-config`. A space then reads
 
 ```
-  ● ACT-1638 Discover catalog  #1049 draft ✗
-    act-1638-discover-catalog
+  ● HAL-231 Offline sync conflicts  #482 ✓ approved
+    hal-231-offline-sync-conflicts
 ```
 
 and an agent

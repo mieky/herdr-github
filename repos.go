@@ -178,19 +178,22 @@ var listWorkspacesFn = listWorkspaces
 // findCheckout finds a local clone of r:
 //
 //  1. the config's "repos" map, by host/owner/repo or owner/repo;
-//  2. any checkout herdr has a space for, or the one the picker was opened
-//     from, whose remotes include r (so a fork's clone counts, by its
+//  2. any checkout herdr has a space for, or the ones the picker (or the
+//     app) was opened from, whose remotes include r (so a fork's clone counts, by its
 //     upstream remote);
 //  3. <clone_root>/<owner>/<repo>, if it's there.
-func findCheckout(ctx context.Context, cfg config, r repoRef, invoked string) (string, error) {
+func findCheckout(ctx context.Context, cfg config, r repoRef, invoked ...string) (string, error) {
 	for _, k := range []string{r.key(), strings.ToLower(r.String())} {
 		if d, ok := cfg.Repos[k]; ok && d != "" {
 			return d, nil
 		}
 	}
 	var dirs []string
-	if invoked != "" {
-		if top, err := git(ctx, invoked, "rev-parse", "--show-toplevel"); err == nil {
+	for _, d := range invoked {
+		if d == "" {
+			continue
+		}
+		if top, err := git(ctx, expandHome(d), "rev-parse", "--show-toplevel"); err == nil {
 			dirs = append(dirs, top)
 		}
 	}

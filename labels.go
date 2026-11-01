@@ -70,7 +70,11 @@ type reported struct {
 	Branch string            `json:"branch"` // the branch (cache key) they were for
 }
 
-func labelStatePath() string { return filepath.Join(stateDir(), "labels.json") }
+// labelStateFile is the label state's file in the state dir; the app keeps its
+// own, so the two never step on each other.
+var labelStateFile = "labels.json"
+
+func labelStatePath() string { return filepath.Join(stateDir(), labelStateFile) }
 
 func readLabelState() labelState {
 	var s labelState

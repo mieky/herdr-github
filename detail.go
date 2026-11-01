@@ -205,17 +205,42 @@ func mergeableNow(d *prDetail) bool {
 	return false
 }
 
-// readiness is one line on whether the PR can merge, and if not, why not.
-func readiness(d *prDetail) (text string, style lipgloss.Style) {
+// readiness is one line on whether the PR can merge, and if not, why not,
+// in its tone's style.
+func readiness(d *prDetail) (string, lipgloss.Style) {
+	text, tone := readinessTone(d)
+	return text, toneStyle(tone)
+}
+
+// toneStyle is the style for a tone: ok, warn, err, dim, merged or queue.
+func toneStyle(tone string) lipgloss.Style {
+	switch tone {
+	case "ok":
+		return styleOK
+	case "warn":
+		return styleWarn
+	case "err":
+		return styleErr
+	case "merged":
+		return styleMerged
+	case "queue":
+		return styleTree
+	}
+	return styleDim
+}
+
+// readinessTone is readiness with its tone named, for the app as well as the
+// popup.
+func readinessTone(d *prDetail) (text, tone string) {
 	switch {
 	case d.State == "MERGED":
-		return "Merged", styleMerged
+		return "Merged", "merged"
 	case d.State == "CLOSED":
-		return "Closed without merging", styleErr
+		return "Closed without merging", "err"
 	case d.IsDraft:
-		return "Draft: mark it ready for review (d) before it can merge", styleDim
+		return "Draft: mark it ready for review (d) before it can merge", "dim"
 	case d.Mergeable == "CONFLICTING" || d.MergeStateStatus == "DIRTY":
-		return "Conflicts with " + d.BaseRefName + ": resolve them before merging", styleErr
+		return "Conflicts with " + d.BaseRefName + ": resolve them before merging", "err"
 	case d.MergeQueueEntry != nil:
 		return queued(d.MergeQueueEntry)
 	}
@@ -223,15 +248,15 @@ func readiness(d *prDetail) (text string, style lipgloss.Style) {
 	var s string
 	switch d.MergeStateStatus {
 	case "CLEAN":
-		s, style = "Ready to merge", styleOK
+		s, tone = "Ready to merge", "ok"
 	case "HAS_HOOKS":
-		s, style = "Ready to merge (the server runs pre-receive hooks)", styleOK
+		s, tone = "Ready to merge (the server runs pre-receive hooks)", "ok"
 	case "UNSTABLE":
-		s, style = "Can merge, but checks that aren't required are failing", styleWarn
+		s, tone = "Can merge, but checks that aren't required are failing", "warn"
 	case "BEHIND":
-		s, style = "Behind "+d.BaseRefName+": it must be brought up to date first", styleWarn
+		s, tone = "Behind "+d.BaseRefName+": it must be brought up to date first", "warn"
 	case "BLOCKED":
-		style = styleErr
+		tone = "err"
 		switch {
 		case failing > 0:
 			s = fmt.Sprintf("Blocked: %d required %s failing", failing, plural(failing, "check", "checks"))
@@ -240,12 +265,12 @@ func readiness(d *prDetail) (text string, style lipgloss.Style) {
 		case d.ReviewDecision == "REVIEW_REQUIRED":
 			s = "Blocked: needs an approving review"
 		case pending > 0:
-			s, style = fmt.Sprintf("Waiting on %d required %s", pending, plural(pending, "check", "checks")), styleWarn
+			s, tone = fmt.Sprintf("Waiting on %d required %s", pending, plural(pending, "check", "checks")), "warn"
 		default:
 			s = "Blocked by the branch's rules"
 		}
 	default:
-		s, style = "GitHub is still working out whether it can merge (ctrl+r)", styleDim
+		s, tone = "GitHub is still working out whether it can merge (ctrl+r)", "dim"
 	}
 	if d.IsMergeQueueEnabled && (d.MergeStateStatus == "CLEAN" || d.MergeStateStatus == "HAS_HOOKS") {
 		s += ": through the merge queue"
@@ -253,12 +278,12 @@ func readiness(d *prDetail) (text string, style lipgloss.Style) {
 	if !d.ViewerCanMerge {
 		s += " · you can't merge in this repo"
 	}
-	return s, style
+	return s, tone
 }
 
 // queued is where a PR is in its merge queue, in words: its place, what's
 // happening to it, and how long GitHub expects.
-func queued(q *queueEntry) (string, lipgloss.Style) {
+func queued(q *queueEntry) (string, string) {
 	what := map[string]string{
 		"QUEUED":          "waiting its turn",
 		"AWAITING_CHECKS": "its checks are running",
@@ -274,9 +299,9 @@ func queued(q *queueEntry) (string, lipgloss.Style) {
 		s += fmt.Sprintf(" · about %d min", max(1, (*q.EstimatedTimeToMerge+30)/60))
 	}
 	if q.State == "UNMERGEABLE" {
-		return s, styleErr
+		return s, "err"
 	}
-	return s, styleTree
+	return s, "queue"
 }
 
 // ordinal is 1st, 2nd, 3rd, 4th, … 11th, 12th, 13th, … 21st.
@@ -317,90 +342,114 @@ func plural(n int, one, many string) string {
 	return many
 }
 
-// mergeMenu offers what can be done now: merge with any method the repo
-// allows (your last choice for this repo first), or, while it's not ready,
-// auto-merge; or turning auto-merge off.
+// mergeChoice is one thing the merge menu offers: Do is merge, auto,
+// auto-off, enqueue or dequeue; Method the merge method, for merge and auto.
+type mergeChoice struct {
+	Do     string `json:"do"`
+	Method string `json:"method,omitempty"`
+	Label  string `json:"label"`
+}
+
+// mergeChoices is what the merge menu offers, under its title: merge with
+// any method the repo allows (your last choice for this repo first), or,
+// while it's not ready, auto-merge; or turning auto-merge off. Where the
+// base branch has a merge queue, the queue merges it by its own method once
+// it's through: in the queue, it can be taken out; ready (or only waiting on
+// checks the queue will run), put in. With nothing to offer, why says why.
+func mergeChoices(d *prDetail) (title string, out []mergeChoice, why string) {
+	switch {
+	case d.State != "OPEN":
+		return "", nil, fmt.Sprintf("#%d is already %s.", d.Number, strings.ToLower(d.State))
+	case d.IsDraft:
+		return "", nil, "It's a draft: mark it ready for review first."
+	case !d.ViewerCanMerge:
+		return "", nil, "You don't have permission to merge in " + d.Repository.NameWithOwner + "."
+	}
+	if d.IsMergeQueueEnabled {
+		title = fmt.Sprintf("Merge #%d into %s, through its merge queue", d.Number, d.BaseRefName)
+		if d.MergeQueueEntry != nil {
+			return title, []mergeChoice{{Do: "dequeue", Label: "Take it out of the merge queue"}}, ""
+		}
+		failing, _ := requiredCounts(d.Checks)
+		onlyWaiting := d.MergeStateStatus == "BLOCKED" && failing == 0 &&
+			d.ReviewDecision != "CHANGES_REQUESTED" && d.ReviewDecision != "REVIEW_REQUIRED"
+		if !mergeableNow(d) && !onlyWaiting {
+			reason, _ := readinessTone(d)
+			return "", nil, "It can't join the merge queue yet: " + reason
+		}
+		return title, []mergeChoice{{Do: "enqueue", Label: "Add it to the merge queue"}}, ""
+	}
+	title = fmt.Sprintf("Merge #%d into %s", d.Number, d.BaseRefName)
+	if d.AutoMergeRequest != nil {
+		out = append(out, mergeChoice{Do: "auto-off", Label: "Turn off auto-merge"})
+	}
+	now := mergeableNow(d)
+	for _, meth := range orderMethods(d.RepoSettings.methods(), preferredMethod(d.repo(), d.RepoSettings.ViewerDefaultMergeMethod)) {
+		if now {
+			out = append(out, mergeChoice{Do: "merge", Method: meth, Label: methodNames[meth]})
+		} else if d.RepoSettings.AutoMergeAllowed && d.AutoMergeRequest == nil && d.Mergeable != "CONFLICTING" {
+			out = append(out, mergeChoice{Do: "auto", Method: meth, Label: "Auto-merge when ready: " + strings.ToLower(methodNames[meth])})
+		}
+	}
+	if len(out) == 0 {
+		why, _ = readinessTone(d)
+		if !d.RepoSettings.AutoMergeAllowed && !now {
+			why += " (and auto-merge is off for this repo)"
+		}
+		return "", nil, why
+	}
+	return title, out, ""
+}
+
+// confirmText is the question asked once more before a choice runs, naming
+// exactly what's about to happen, and the answer that goes ahead; "" for a
+// choice that runs at once.
+func confirmText(d *prDetail, c mergeChoice) (question, yes string) {
+	switch c.Do {
+	case "merge":
+		return fmt.Sprintf("%s #%d into %s now?", methodVerbs[c.Method], d.Number, d.BaseRefName), methodVerbs[c.Method] + " it"
+	case "auto":
+		return fmt.Sprintf("Turn on auto-merge (%s) for #%d? It merges once checks and reviews allow.", strings.ToLower(methodNames[c.Method]), d.Number), "Turn on auto-merge"
+	case "enqueue":
+		return fmt.Sprintf("Add #%d to the merge queue for %s? It merges when its turn comes.", d.Number, d.BaseRefName), "Add it to the queue"
+	}
+	return "", ""
+}
+
+// mergeMenu is mergeChoices as a menu.
 func (m model) mergeMenu() (tea.Model, tea.Cmd) {
 	d := m.curDetail
 	if d == nil {
 		m.flash = "Still loading…"
 		return m, nil
 	}
-	if d.State != "OPEN" {
-		m.err = fmt.Sprintf("#%d is already %s.", d.Number, strings.ToLower(d.State))
-		return m, nil
-	}
-	if d.IsDraft {
-		m.err = "It's a draft: press d to mark it ready for review first."
-		return m, nil
-	}
-	if !d.ViewerCanMerge {
-		m.err = "You don't have permission to merge in " + d.Repository.NameWithOwner + "."
-		return m, nil
-	}
-	if d.IsMergeQueueEnabled {
-		return m.queueMenu()
-	}
-	methods := orderMethods(d.RepoSettings.methods(), preferredMethod(d.repo(), d.RepoSettings.ViewerDefaultMergeMethod))
-	mn := &menu{title: fmt.Sprintf("Merge #%d into %s", d.Number, d.BaseRefName)}
-	if d.AutoMergeRequest != nil {
-		mn.items = append(mn.items, menuItem{label: "Turn off auto-merge", run: func(m model) (tea.Model, tea.Cmd) {
-			client, ctx, key := m.client, m.ctx, d.key()
-			return m.busy("Turning off auto-merge…", func() prChangedMsg {
-				return prChangedMsg{key: key, flash: "Auto-merge is off", err: client.disableAutoMerge(ctx, d)}
-			})
-		}})
-	}
-	now := mergeableNow(d)
-	for _, meth := range methods {
-		meth := meth
-		if now {
-			mn.items = append(mn.items, menuItem{label: methodNames[meth], run: func(m model) (tea.Model, tea.Cmd) {
-				return m.openMenu(confirmMerge(d, meth, false)), nil
-			}})
-		} else if d.RepoSettings.AutoMergeAllowed && d.AutoMergeRequest == nil && d.Mergeable != "CONFLICTING" {
-			mn.items = append(mn.items, menuItem{label: "Auto-merge when ready: " + strings.ToLower(methodNames[meth]), run: func(m model) (tea.Model, tea.Cmd) {
-				return m.openMenu(confirmMerge(d, meth, true)), nil
-			}})
+	title, choices, why := mergeChoices(d)
+	if why != "" {
+		if d.IsDraft && d.State == "OPEN" {
+			why = "It's a draft: press d to mark it ready for review first."
 		}
-	}
-	if len(mn.items) == 0 {
-		reason, _ := readiness(d)
-		if !d.RepoSettings.AutoMergeAllowed && !now {
-			reason += " (and auto-merge is off for this repo)"
-		}
-		m.err = reason
+		m.err = why
 		return m, nil
 	}
-	mn.items = append(mn.items, menuItem{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }})
-	return m.openMenu(mn), nil
-}
-
-// queueMenu is the merge menu where the base branch has a merge queue: the
-// queue merges it, by its own method, once it's through. In the queue, it
-// can be taken out; ready (or only waiting on checks the queue will run),
-// put in; otherwise why not.
-func (m model) queueMenu() (tea.Model, tea.Cmd) {
-	d := m.curDetail
-	mn := &menu{title: fmt.Sprintf("Merge #%d into %s, through its merge queue", d.Number, d.BaseRefName)}
-	if d.MergeQueueEntry != nil {
-		mn.items = append(mn.items, menuItem{label: "Take it out of the merge queue", run: func(m model) (tea.Model, tea.Cmd) {
-			client, ctx, key := m.client, m.ctx, d.key()
-			return m.busy("Taking it out of the merge queue…", func() prChangedMsg {
-				return prChangedMsg{key: key, flash: fmt.Sprintf("#%d is out of the merge queue", d.Number), err: client.dequeue(ctx, d)}
-			})
-		}})
-	} else {
-		failing, _ := requiredCounts(d.Checks)
-		onlyWaiting := d.MergeStateStatus == "BLOCKED" && failing == 0 &&
-			d.ReviewDecision != "CHANGES_REQUESTED" && d.ReviewDecision != "REVIEW_REQUIRED"
-		if !mergeableNow(d) && !onlyWaiting {
-			reason, _ := readiness(d)
-			m.err = "It can't join the merge queue yet: " + reason
-			return m, nil
-		}
-		mn.items = append(mn.items, menuItem{label: "Add it to the merge queue", run: func(m model) (tea.Model, tea.Cmd) {
-			return m.openMenu(confirmQueue(d)), nil
+	mn := &menu{title: title}
+	for _, c := range choices {
+		c := c
+		mn.items = append(mn.items, menuItem{label: c.Label, run: func(m model) (tea.Model, tea.Cmd) {
+			switch c.Do {
+			case "auto-off":
+				client, ctx, key := m.client, m.ctx, d.key()
+				return m.busy("Turning off auto-merge…", func() prChangedMsg {
+					return prChangedMsg{key: key, flash: "Auto-merge is off", err: client.disableAutoMerge(ctx, d)}
+				})
+			case "dequeue":
+				client, ctx, key := m.client, m.ctx, d.key()
+				return m.busy("Taking it out of the merge queue…", func() prChangedMsg {
+					return prChangedMsg{key: key, flash: fmt.Sprintf("#%d is out of the merge queue", d.Number), err: client.dequeue(ctx, d)}
+				})
+			case "enqueue":
+				return m.openMenu(confirmQueue(d)), nil
+			}
+			return m.openMenu(confirmMerge(d, c.Method, c.Do == "auto")), nil
 		}})
 	}
 	mn.items = append(mn.items, menuItem{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }})
@@ -409,11 +458,12 @@ func (m model) queueMenu() (tea.Model, tea.Cmd) {
 
 // confirmQueue asks once more before a PR joins the merge queue.
 func confirmQueue(d *prDetail) *menu {
+	title, yes := confirmText(d, mergeChoice{Do: "enqueue"})
 	return &menu{
-		title:  fmt.Sprintf("Add #%d to the merge queue for %s? It merges when its turn comes.", d.Number, d.BaseRefName),
+		title:  title,
 		cursor: 1, noDigits: true,
 		items: []menuItem{
-			{label: "Add it to the queue", run: func(m model) (tea.Model, tea.Cmd) {
+			{label: yes, run: func(m model) (tea.Model, tea.Cmd) {
 				client, ctx, key := m.client, m.ctx, d.key()
 				return m.busy(fmt.Sprintf("Adding #%d to the merge queue…", d.Number), func() prChangedMsg {
 					if err := client.enqueue(ctx, d); err != nil {
@@ -445,12 +495,11 @@ func orderMethods(methods []string, preferred string) []string {
 
 // confirmMerge asks once more, naming exactly what's about to happen.
 func confirmMerge(d *prDetail, method string, auto bool) *menu {
-	title := fmt.Sprintf("%s #%d into %s now?", methodVerbs[method], d.Number, d.BaseRefName)
-	yes := methodVerbs[method] + " it"
+	do := "merge"
 	if auto {
-		title = fmt.Sprintf("Turn on auto-merge (%s) for #%d? It merges once checks and reviews allow.", strings.ToLower(methodNames[method]), d.Number)
-		yes = "Turn on auto-merge"
+		do = "auto"
 	}
+	title, yes := confirmText(d, mergeChoice{Do: do, Method: method})
 	return &menu{title: title, cursor: 1, noDigits: true, items: []menuItem{
 		{label: yes, run: func(m model) (tea.Model, tea.Cmd) {
 			client, ctx, key, repo := m.client, m.ctx, d.key(), d.repo()

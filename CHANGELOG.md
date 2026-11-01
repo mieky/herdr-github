@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.0 - 2026-11-01
+
+- **In the Herdr app.** A GitHub mod (in `app/`) brings the popup to the
+  Herdr app: ⌘G, the same three tabs and groups as cards, a PR's screen
+  with whether it can merge and why not, its checks, reviewers, agents and
+  the conversation; merge, auto-merge, the merge queue and draft ↔ ready;
+  `w` for its worktree in a space and `s` for one with Claude Code already
+  asked to look at it. It finds the machine where gh is signed in, makes
+  worktrees on the machine with the checkout, and fetches the herdr-github
+  it needs onto each by itself. Recap's pull requests open in it.
+  `sh install.sh --app` installs it (`--tui` the plugin; no flag, both).
+
+- **`herdr-github app JSON`**: what the mod runs. One request in (list,
+  detail, act, worktree, repos, sessions, status, or a background job's
+  answer), one JSON answer out, from the plugin's own code: the merge menu
+  the popup offers is the one the app offers.
+
 ## 0.9.0 - 2026-11-01
 
 - **Merge queues.** Where a PR's base branch has a merge queue, `m` adds it

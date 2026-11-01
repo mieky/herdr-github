@@ -30,6 +30,9 @@ const usage = `herdr-github — GitHub pull requests in herdr
                    stdout, in the same order. An answer younger than
                    label_refresh_seconds (a minute) is reused; --force asks
                    GitHub again right away
+  app JSON         what the Herdr app's GitHub mod runs: one request (list,
+                   detail, act, worktree, repos, sessions, status, job) in,
+                   one JSON answer out; --demo's data with "demo": true
   status           which GitHub hosts gh is signed in to, as the plugin sees it
   handoff JSON     (internal) open the popup this one was opened from, once
                    this one has closed
@@ -91,6 +94,8 @@ func run(ctx context.Context, args []string) error {
 		return runHandoff(args[1])
 	case "prs":
 		return runPRs(ctx, cfg, args[1:], os.Stdout)
+	case "app":
+		return runApp(ctx, cfg, args[1:], os.Stdout)
 	case "status":
 		return status(ctx, cfg)
 	case "kickoff":

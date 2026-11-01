@@ -29,3 +29,6 @@ func copyLocal(s string) error {
 // remoteSession: a browser opened here wouldn't be in front of you. On a
 // Mac, that's over SSH.
 func remoteSession() bool { return overSSH() }
+
+// jobCmd: on macOS an app job starts as is, in a session of its own.
+func jobCmd(self string, args []string) *exec.Cmd { return nil }
