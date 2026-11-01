@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.10.0 - 2026-11-01
+## 0.10.1 - 2026-11-01
+
+(0.10.0 was tagged but never released: its tests failed on macOS.)
 
 - **In the Herdr app.** A GitHub mod (in `app/`) brings the popup to the
   Herdr app: ⌘G, the same three tabs and groups as cards, a PR's screen

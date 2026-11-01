@@ -116,7 +116,7 @@ func TestAppJobAnswersOnce(t *testing.T) {
 // PR's head; a second ask finds the first; a fork's pushes go to the fork.
 func TestAppWorktree(t *testing.T) {
 	f := gitFixture(t)
-	home := t.TempDir()
+	home, _ := filepath.EvalSymlinks(t.TempDir())
 	t.Setenv("HOME", home)
 	ctx := context.Background()
 	cfg := withDefaults(config{CloneRoot: filepath.Join(f.root, "code")})

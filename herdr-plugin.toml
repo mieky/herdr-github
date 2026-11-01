@@ -1,6 +1,6 @@
 id = "herdr-github"
 name = "GitHub"
-version = "0.10.0"
+version = "0.10.1"
 min_herdr_version = "0.9.0"
 description = "Your pull requests in a herdr popup: merge readiness, checks, reviews and the conversation; toggle draft, merge (or auto-merge), and one key to a worktree for any PR, forks included. Every space and agent gets its branch's PR as a sidebar label, and every PR lists its agents, a key away. Uses gh's sign-in."
 platforms = ["macos", "linux"]

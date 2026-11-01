@@ -27,7 +27,7 @@ import (
 
 // appVersion is this build's version, as herdr-plugin.toml has it (a test
 // holds them together): the mod checks it's the one it pinned.
-const appVersion = "0.10.0"
+const appVersion = "0.10.1"
 
 // appRequest is what the mod asks.
 type appRequest struct {
@@ -563,6 +563,11 @@ func appWorktree(ctx context.Context, cfg config, pr pullRequest, req appRequest
 		}
 		_, _ = git(ctx, path, "config", "branch."+branch+"."+prMarker, prMark(pr))
 		trackHead(ctx, path, pr, rem, branch)
+	}
+	// As git and the app's panes spell it: through any symlink (macOS's /var
+	// is /private/var), so a second ask finds the same path.
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
 	}
 	return map[string]any{"path": path, "created": true, "prompt": prompt}, nil
 }
