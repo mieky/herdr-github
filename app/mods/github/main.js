@@ -160,6 +160,9 @@ export default class GitHub extends View {
     this.on = localStorage.getItem("on"); // the machine gh is signed in on ("" here)
     this.width = 900;
     this.from = p.back ?? null; // the mod it was opened from, to go back to
+    // Where esc goes back to, when another mod opened it on a PR: that mod,
+    // on what it showed (Linear, on the issue).
+    this.backTo = p.backTo ?? null;
     // With herdr-linear's mod installed, a PR's Linear issue opens there.
     this.linear = false;
     cx.spawn(async (cx) => {
@@ -428,6 +431,10 @@ export default class GitHub extends View {
   }
 
   back(cx) {
+    if (this.direct && this.backTo) {
+      this.dismiss();
+      return openOverlay({ mod: this.backTo.mod, kind: "dialog", width: 0.8, height: 0.8, props: this.backTo.props ?? {} });
+    }
     if (this.direct && this.from === "recap") {
       this.dismiss();
       if (this.demo) return openOverlay({ mod: "recap", kind: "dialog", width: 0.8, height: 0.8, props: { demo: true } });
@@ -740,7 +747,7 @@ export default class GitHub extends View {
     this.dismiss();
     openOverlay({ mod: "linear", kind: "dialog", width: 0.8, height: 0.8, props: {
       issue: { key }, back: "github", demo: this.demo || undefined,
-      backTo: { mod: "github", props: { pr: { host: pr.host, repo: pr.repo, number: pr.number }, demo: this.demo || undefined } },
+      backTo: { mod: "github", label: `#${pr.number}`, props: { pr: { host: pr.host, repo: pr.repo, number: pr.number }, demo: this.demo || undefined, backTo: this.backTo ?? undefined, back: this.from ?? undefined } },
     } });
   }
 
@@ -992,7 +999,7 @@ export default class GitHub extends View {
     const tree = this.treeOf(pr);
     const ag = this.agentsOf(pr);
     const now = Date.now();
-    const from = this.direct && this.from === "recap" ? "Recap" : this.tabLabel(TABS.find((x) => x.id === this.tab), true);
+    const from = this.direct && this.backTo?.label ? this.backTo.label : this.direct && this.from === "recap" ? "Recap" : this.tabLabel(TABS.find((x) => x.id === this.tab), true);
 
     const checks = d?.checkList ?? [];
     const count = (x) => checks.filter((c) => c.outcome === x).length;
@@ -1135,7 +1142,9 @@ export default class GitHub extends View {
       .gap(10)
       .bg(t.popover)
       .text_size(13)
-      .track_focus(this.keys)
+      // The keyboard: the filter's, in the list (as Recap's), so ↑ ↓ reach the
+      // list through it; on a screen without one, the popup's own.
+      .when(Boolean(pr), (el) => el.track_focus(this.keys))
       .on_size_change((size, cx) => {
         if (Math.abs(size.width - this.width) > 20) {
           this.width = size.width;
