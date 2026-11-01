@@ -31,4 +31,4 @@ func copyLocal(s string) error {
 func remoteSession() bool { return overSSH() }
 
 // jobCmd: on macOS an app job starts as is, in a session of its own.
-func jobCmd(self string, args []string) *exec.Cmd { return nil }
+func jobCmd(self string, args []string, logPath string) *exec.Cmd { return nil }
