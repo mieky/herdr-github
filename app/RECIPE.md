@@ -90,7 +90,8 @@ says so.
   `agent.focus`, or resumes a closed one (`claude --resume`) in a space.
 - Opens links with the system's browser and copies them to the clipboard.
 - Keeps, in its own `localStorage`, which machine answered, the tab it was
-  on and the worktrees it made.
+  on and the worktrees it made; and its last lists in `github-cache.json` in
+  the app's home, to show them at once on opening while fresh ones load.
 
 ## Its look
 

@@ -121,6 +121,9 @@ function ticketKey(...texts) {
 const MAGIC = /\b(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?|part of|refs?)\s+([A-Za-z][A-Za-z0-9]{1,9}-[1-9][0-9]{0,5})\b/i;
 const issueOf = (pr, body) => ticketKey(pr?.head, pr?.title) ?? (MAGIC.exec(body ?? "")?.[1]?.toUpperCase() || null);
 
+// Where the lists are kept between openings.
+const CACHE = `${appHome()}/github-cache.json`;
+
 const machineOf = (address) => (address?.includes("/") ? address.split("/")[0] : null);
 const prID = (pr) => ({ host: pr.host, repo: pr.repo, number: pr.number });
 
@@ -187,6 +190,7 @@ export default class GitHub extends View {
     cx.timer.after(400, () => this.screen === "list" && this.input.focus());
 
     cx.spawn(async (cx) => {
+      await this.readCache(cx);
       if (p.pr) this.openPR({ ...p.pr, key: `${p.pr.host}/${p.pr.repo}#${p.pr.number}`.toLowerCase(), title: `#${p.pr.number}`, labels: [] }, cx, true);
       await this.start(cx);
       cx.notify();
@@ -294,7 +298,35 @@ export default class GitHub extends View {
     for (const t of TABS) this.load(t.id, cx);
   }
 
+  // The lists as they were last time, shown at once on opening while fresh
+  // ones are asked for: a file in the app's folder (a shared value would
+  // redraw every mod each time it's set). Never the demo's.
+  async readCache(cx) {
+    if (this.demo) return;
+    this.cache = JSON.parse((await fs.readFile(CACHE, "utf8").catch(() => null)) ?? "{}");
+    this.login ||= this.cache.login ?? "";
+    for (const t of ["mine", "review"]) this.seed(t, this.cache.lists?.[t]);
+    cx.notify();
+  }
+
+  seed(tab, kept) {
+    const l = this.lists[tab];
+    if (!kept || this.demo || (l?.loaded && !l.cached)) return;
+    this.lists[tab] = { ...l, prs: kept.prs ?? [], next: kept.next ?? "", loaded: true, cached: true, loading: l?.loading };
+  }
+
+  keep(tab, l) {
+    if (this.demo) return;
+    const c = (this.cache ??= {});
+    c.login = this.login;
+    c.lists ??= {};
+    if (tab === "repo") (c.repos ??= {})[this.repoSpec()] = { prs: l.prs, next: l.next };
+    else c.lists[tab] = { prs: l.prs, next: l.next };
+    fs.writeFile(CACHE, JSON.stringify(c)).catch(() => {});
+  }
+
   load(tab, cx, more = false) {
+    if (tab === "repo" && !more && !this.lists.repo?.loaded) this.seed("repo", this.cache?.repos?.[this.repoSpec()]);
     const l = (this.lists[tab] ??= { prs: [], next: "", loaded: false });
     if (l.loading || (more && !l.next)) return;
     if (tab === "repo" && !this.repo) {
@@ -310,6 +342,8 @@ export default class GitHub extends View {
         l.next = res.next;
         l.warning = res.warning ?? "";
         l.error = "";
+        l.cached = false;
+        if (!more) this.keep(tab, l);
       } catch (e) {
         l.error = e?.signedOut ? `Not signed in to ${e.signedOut === true ? "GitHub" : e.signedOut}: run gh auth login` : String(e?.message ?? e);
       }
