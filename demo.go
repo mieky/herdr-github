@@ -363,6 +363,20 @@ func (d *demoSource) dequeue(_ context.Context, pd *prDetail) error {
 	return nil
 }
 
+// updateBranch brings it up to date: its required checks start again.
+func (d *demoSource) updateBranch(_ context.Context, pd *prDetail) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	p := d.find(pd.key())
+	p.MergeStateStatus = "BLOCKED"
+	for i := range p.Checks {
+		if p.Checks[i].IsRequired {
+			p.Checks[i].Status, p.Checks[i].Conclusion = "IN_PROGRESS", ""
+		}
+	}
+	return nil
+}
+
 func (d *demoSource) deleteBranch(_ context.Context, pd *prDetail) error { return nil }
 
 func (d *demoSource) removeTree(key string) {

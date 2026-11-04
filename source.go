@@ -38,6 +38,8 @@ type source interface {
 	// enqueue and dequeue: in and out of the base branch's merge queue.
 	enqueue(ctx context.Context, d *prDetail) error
 	dequeue(ctx context.Context, d *prDetail) error
+	// updateBranch merges the base into a PR's branch that's behind it.
+	updateBranch(ctx context.Context, d *prDetail) error
 	deleteBranch(ctx context.Context, d *prDetail) error
 	// repos pages through the repos you can reach, for the repo list:
 	// the first page with cursor "", then each page's next until it's "".
@@ -184,6 +186,10 @@ func (s *githubSource) enqueue(ctx context.Context, d *prDetail) error {
 
 func (s *githubSource) dequeue(ctx context.Context, d *prDetail) error {
 	return s.client(d.Host).dequeue(ctx, d.ID)
+}
+
+func (s *githubSource) updateBranch(ctx context.Context, d *prDetail) error {
+	return s.client(d.Host).updateBranch(ctx, d)
 }
 
 func (s *githubSource) deleteBranch(ctx context.Context, d *prDetail) error {

@@ -27,7 +27,8 @@ one that opened it and any that worked on it since, a key or a click away.
   threads, and the conversation.
 - **Draft ↔ ready** with one key.
 - **Merge** with any method the repo allows, your last one first, after a
-  confirmation. Not mergeable yet? **Auto-merge** instead. Then optionally
+  confirmation. Not mergeable yet? **Auto-merge** instead, or, behind its
+  base, **update the branch** first. Then optionally
   delete the branch and remove the worktree.
 - **Worktrees**: one key opens the PR's worktree, or makes it: in the right
   repo (found by its remotes, wherever you open the popup), on the PR's
@@ -156,7 +157,7 @@ along the bottom and clickable:
 |-----|------|
 | `w` | its worktree, in a space: opened if it has one, made if not |
 | `s` | start: the same, with an agent in it asked to look at the PR (a new worktree only) |
-| `m` | merge: the methods the repo allows, auto-merge, or its merge queue; asks first. After a merge, offers to delete the branch and remove the worktree |
+| `m` | merge: the methods the repo allows, auto-merge, its merge queue, or updating a branch that's behind; asks first. After a merge, offers to delete the branch and remove the worktree |
 | `d` | draft ↔ ready for review |
 | `a` | its agents: go to one, or resume a closed Claude session where it ran |
 | `l` | its Linear issue (from its branch, title or a "Fixes HAL-212"), in herdr-linear's Linear mod |
@@ -360,13 +361,19 @@ to select text hold **⌥** while dragging.
 - **Auto-merge when ready**, when it can't merge yet (checks running, a
   review missing) and the repo has auto-merge turned on.
 - **Turn off auto-merge**, when it's on.
+- **Update the branch with main**, when the repo requires branches to be up
+  to date and this one is behind: it merges the base into the PR's branch,
+  as GitHub's *Update branch* button does. Its checks run again, so it's
+  blocked on them for a while rather than ready straight away. A fork's
+  branch only when it lets maintainers push to it.
 
 ![Merging](docs/images/merge.png)
 
 Picking one asks once more, naming exactly what will happen: *Squash-merge
 #482 into main now?* The merge is pinned to the commit you were looking at:
 if someone pushed since the screen loaded, GitHub refuses rather than merge
-code you haven't seen (press ctrl+r and look again).
+code you haven't seen (press ctrl+r and look again). Updating the branch is
+pinned the same way.
 
 A draft, a PR with conflicts, or a repo where you can't merge gets a line
 saying so instead of a menu.

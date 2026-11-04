@@ -355,7 +355,9 @@ type mergeChoice struct {
 // while it's not ready, auto-merge; or turning auto-merge off. Where the
 // base branch has a merge queue, the queue merges it by its own method once
 // it's through: in the queue, it can be taken out; ready (or only waiting on
-// checks the queue will run), put in. With nothing to offer, why says why.
+// checks the queue will run), put in. Behind its base where it must be up to
+// date, it can be brought up to date first. With nothing to offer, why says
+// why.
 func mergeChoices(d *prDetail) (title string, out []mergeChoice, why string) {
 	switch {
 	case d.State != "OPEN":
@@ -380,6 +382,9 @@ func mergeChoices(d *prDetail) (title string, out []mergeChoice, why string) {
 		return title, []mergeChoice{{Do: "enqueue", Label: "Add it to the merge queue"}}, ""
 	}
 	title = fmt.Sprintf("Merge #%d into %s", d.Number, d.BaseRefName)
+	if canUpdateBranch(d) {
+		out = append(out, mergeChoice{Do: "update", Label: "Update the branch with " + d.BaseRefName})
+	}
 	if d.AutoMergeRequest != nil {
 		out = append(out, mergeChoice{Do: "auto-off", Label: "Turn off auto-merge"})
 	}
@@ -412,8 +417,18 @@ func confirmText(d *prDetail, c mergeChoice) (question, yes string) {
 		return fmt.Sprintf("Turn on auto-merge (%s) for #%d? It merges once checks and reviews allow.", strings.ToLower(methodNames[c.Method]), d.Number), "Turn on auto-merge"
 	case "enqueue":
 		return fmt.Sprintf("Add #%d to the merge queue for %s? It merges when its turn comes.", d.Number, d.BaseRefName), "Add it to the queue"
+	case "update":
+		return fmt.Sprintf("Merge %s into %s, to bring #%d up to date? Its checks run again.", d.BaseRefName, d.HeadRefName, d.Number), "Update the branch"
 	}
 	return "", ""
+}
+
+// canUpdateBranch: the PR is behind its base, which it must be up to date
+// with to merge, and its branch is yours to update: in the repo (you can
+// merge, so you can push), or a fork's that lets maintainers push to it.
+func canUpdateBranch(d *prDetail) bool {
+	return d.MergeStateStatus == "BEHIND" && d.Mergeable != "CONFLICTING" &&
+		(!d.IsCrossRepository || d.MaintainerCanModify)
 }
 
 // mergeMenu is mergeChoices as a menu.
@@ -448,6 +463,8 @@ func (m model) mergeMenu() (tea.Model, tea.Cmd) {
 				})
 			case "enqueue":
 				return m.openMenu(confirmQueue(d)), nil
+			case "update":
+				return m.openMenu(confirmUpdate(d)), nil
 			}
 			return m.openMenu(confirmMerge(d, c.Method, c.Do == "auto")), nil
 		}})
@@ -475,6 +492,32 @@ func confirmQueue(d *prDetail) *menu {
 			{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }},
 		},
 	}
+}
+
+// confirmUpdate asks once more before the base is merged into the PR's branch.
+func confirmUpdate(d *prDetail) *menu {
+	title, yes := confirmText(d, mergeChoice{Do: "update"})
+	return &menu{
+		title:  title,
+		cursor: 1, noDigits: true,
+		items: []menuItem{
+			{label: yes, run: func(m model) (tea.Model, tea.Cmd) {
+				client, ctx, key := m.client, m.ctx, d.key()
+				return m.busy(fmt.Sprintf("Bringing #%d up to date…", d.Number), func() prChangedMsg {
+					if err := client.updateBranch(ctx, d); err != nil {
+						return prChangedMsg{key: key, err: err}
+					}
+					return prChangedMsg{key: key, flash: updatedText(d)}
+				})
+			}},
+			{label: "Cancel", run: func(m model) (tea.Model, tea.Cmd) { return m, nil }},
+		},
+	}
+}
+
+// updatedText is what's said once a PR's branch is brought up to date.
+func updatedText(d *prDetail) string {
+	return fmt.Sprintf("#%d is up to date with %s: its checks run again", d.Number, d.BaseRefName)
 }
 
 // orderMethods puts the preferred method first, keeping GitHub's order otherwise.

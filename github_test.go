@@ -379,3 +379,22 @@ func TestQueueMutations(t *testing.T) {
 		t.Fatalf("dequeue: %+v", got[1])
 	}
 }
+
+func TestUpdateBranchPinsTheHeadCommit(t *testing.T) {
+	var got []gqlRequest
+	fakeGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, decodeReq(t, r))
+		reply(w, map[string]any{})
+	})
+	d := &prDetail{HeadRefOid: "abc123"}
+	d.ID = "PR_1"
+	if err := newClient("github.com").updateBranch(context.Background(), d); err != nil {
+		t.Fatal(err)
+	}
+	// No updateMethod: a merge, GitHub's default, and older Enterprise servers
+	// don't know the argument.
+	if len(got) != 1 || !strings.Contains(got[0].Query, "updatePullRequestBranch") || strings.Contains(got[0].Query, "updateMethod") ||
+		got[0].Variables["oid"] != "abc123" || got[0].Variables["id"] != "PR_1" {
+		t.Fatalf("update branch: %+v", got)
+	}
+}

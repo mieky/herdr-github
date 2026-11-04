@@ -789,3 +789,73 @@ func TestOrdinal(t *testing.T) {
 		}
 	}
 }
+
+// Behind its base where it must be up to date (issue #1): where the menu had
+// nothing to offer, it offers bringing it up to date, and in the demo that
+// starts its checks again.
+func TestBehindPROffersUpdatingItsBranch(t *testing.T) {
+	m := press(onPR(t, demoModel(t, tabMine), 482), "enter")
+	d := m.curDetail
+	d.MergeStateStatus, d.RepoSettings.AutoMergeAllowed = "BEHIND", false
+	if _, choices, why := mergeChoices(d); why != "" || len(choices) != 1 || choices[0].Do != "update" ||
+		choices[0].Label != "Update the branch with main" {
+		t.Fatalf("behind, no auto-merge: %+v %q", choices, why)
+	}
+	if q, yes := confirmText(d, mergeChoice{Do: "update"}); !strings.Contains(q, "Merge main into "+d.HeadRefName) || yes != "Update the branch" {
+		t.Fatalf("confirm: %q %q", q, yes)
+	}
+	// With auto-merge on for the repo, both: update first.
+	d.RepoSettings.AutoMergeAllowed = true
+	if _, choices, _ := mergeChoices(d); len(choices) < 2 || choices[0].Do != "update" || choices[1].Do != "auto" {
+		t.Fatalf("behind, auto-merge allowed: %+v", choices)
+	}
+	// A fork's branch that maintainers can't push to isn't yours to update.
+	d.IsCrossRepository, d.MaintainerCanModify, d.RepoSettings.AutoMergeAllowed = true, false, false
+	if _, choices, why := mergeChoices(d); len(choices) != 0 || !strings.Contains(why, "Behind main") {
+		t.Fatalf("fork, no maintainer edits: %+v %q", choices, why)
+	}
+	d.IsCrossRepository = false
+
+	m = press(m, "m")
+	if m.menu == nil || m.menu.items[0].label != "Update the branch with main" {
+		t.Fatalf("menu: %+v", m.menu)
+	}
+	m = press(m, "enter")
+	if m.menu == nil || !strings.HasPrefix(m.menu.title, "Merge main into") {
+		t.Fatalf("should ask first: %+v", m.menu)
+	}
+	if m2 := press(m, "enter"); m2.curDetail.MergeStateStatus == "BLOCKED" {
+		t.Fatal("the confirmation must start on Cancel")
+	}
+	m = press(m, "up", "enter")
+	if !strings.Contains(m.flash, "#482 is up to date with main") || m.err != "" {
+		t.Fatalf("flash=%q err=%q", m.flash, m.err)
+	}
+	if m.curDetail.MergeStateStatus != "BLOCKED" {
+		t.Fatalf("after updating: %q", m.curDetail.MergeStateStatus)
+	}
+}
+
+// The app's merge menu is the same choices: updating runs through appAct.
+func TestAppUpdatesABehindBranch(t *testing.T) {
+	src := newDemoSource()
+	ctx := context.Background()
+	p, _ := src.list(ctx, tabMine, "")
+	var pr pullRequest
+	for _, x := range p.prs {
+		if x.Number == 482 {
+			pr = x
+		}
+	}
+	d, err := src.detail(ctx, pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	said, err := appAct(ctx, src, d, appRequest{Do: "update"})
+	if err != nil || said != "#482 is up to date with main: its checks run again" {
+		t.Fatalf("%q %v", said, err)
+	}
+	if d, _ = src.detail(ctx, pr); d.MergeStateStatus != "BLOCKED" {
+		t.Fatalf("after: %q", d.MergeStateStatus)
+	}
+}

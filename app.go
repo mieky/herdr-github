@@ -403,6 +403,8 @@ func appAct(ctx context.Context, src source, d *prDetail, req appRequest) (strin
 		return fmt.Sprintf("#%d is in the merge queue", n), src.enqueue(ctx, d)
 	case "dequeue":
 		return fmt.Sprintf("#%d is out of the merge queue", n), src.dequeue(ctx, d)
+	case "update":
+		return updatedText(d), src.updateBranch(ctx, d)
 	case "delete-branch":
 		return "Deleted " + d.HeadRefName + " on GitHub", src.deleteBranch(ctx, d)
 	}

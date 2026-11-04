@@ -657,6 +657,15 @@ func (c *ghClient) enqueue(ctx context.Context, d *prDetail) error {
 }`, map[string]any{"id": d.ID, "oid": d.HeadRefOid}, nil)
 }
 
+// updateBranch merges the base branch into the PR's, as GitHub's "Update
+// branch" does (a merge, its default; updateMethod is left out, which older
+// Enterprise servers don't know). Pinned to the head commit, as merge is.
+func (c *ghClient) updateBranch(ctx context.Context, d *prDetail) error {
+	return c.graphql(ctx, `mutation($id: ID!, $oid: GitObjectID) {
+  updatePullRequestBranch(input: {pullRequestId: $id, expectedHeadOid: $oid}) { clientMutationId }
+}`, map[string]any{"id": d.ID, "oid": d.HeadRefOid}, nil)
+}
+
 // dequeue takes the PR out of the merge queue.
 func (c *ghClient) dequeue(ctx context.Context, prID string) error {
 	return c.graphql(ctx, `mutation($id: ID!) { dequeuePullRequest(input: {id: $id}) { clientMutationId } }`,
