@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 - 2026-11-04
+
+- **Update the branch** from the merge menu, in the TUI and the app: a PR
+  that's behind its base (and has no conflicts) can have the base merged
+  into it, so it's up to date and its checks run again. Pinned to the head
+  commit you saw, so it won't update one that's moved since.
+
 ## 0.10.3 - 2026-11-01
 
 - **Background jobs keep a log** and record their process (a worktree's

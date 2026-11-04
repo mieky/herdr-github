@@ -17,7 +17,7 @@ import { tones, tint, countPill, groupOf, toneColor, prLook, checkLook, ago, ico
 
 // The herdr-github this mod is part of (its release; the repo's tests hold it
 // to herdr-plugin.toml's version).
-export const GITHUB_VERSION = "0.10.3";
+export const GITHUB_VERSION = "0.11.0";
 
 // Puts that release on a machine, once: into a folder of its own version, so
 // it never touches a herdr-github installed for the TUI. The archive for the
