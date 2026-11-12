@@ -512,8 +512,10 @@ export default class GitHub extends View {
     closeOverlay(props().overlay);
   }
 
+  // Web links only: a PR body is anyone's markdown, and file: or app links would reach the OS.
   open(url, cx) {
     if (!url) return;
+    if (!/^https?:\/\//i.test(url)) return this.say(`Not opening ${url}: only web links open.`, cx, true);
     if (this.demo) return this.say(`Demo: would open ${url}`, cx);
     cx.open_url(url);
   }
