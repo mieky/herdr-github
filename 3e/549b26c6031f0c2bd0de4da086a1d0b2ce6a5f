@@ -1,0 +1,20 @@
+app/mods/github/main.js
+  s_4ad5f42e0d01b6::t_8a949514f79473 518
+  s_4ad5f42e0d01b6::t_ae702bdc521f7d 515
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3e549b26c6031f0c2bd0de4da086a1d0b2ce6a5f",
+  "prompts": {},
+  "sessions": {
+    "s_4ad5f42e0d01b6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1c32e4a4-937a-42f8-b1f4-c2e6caa5b686",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Mike Arvela <mike@arvela.net>"
+    }
+  }
+}
